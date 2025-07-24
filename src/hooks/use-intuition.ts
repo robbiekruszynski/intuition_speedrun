@@ -11,6 +11,10 @@ import {
   batchCreateAtomsFromThings,
   batchCreateTripleStatements,
   createAtomFromEthereumAccount,
+  createAtomFromIpfsUpload,
+  createAtomFromIpfsUri,
+  createAtomFromString,
+  createAtomFromThing,
   uploadJsonToPinata
 } from '@0xintuition/sdk'
 
@@ -39,6 +43,10 @@ export function useIntuition() {
         get: getAtom,
         create: {
           fromEthereumAccount: createAtomFromEthereumAccount,
+          fromIpfsUpload: createAtomFromIpfsUpload,
+          fromIpfsUri: createAtomFromIpfsUri,
+          fromString: createAtomFromString,
+          fromThing: createAtomFromThing,
           batchFromEthereumAccounts: batchCreateAtomsFromEthereumAccounts,
           batchFromIpfsUris: batchCreateAtomsFromIpfsUris,
           batchFromSmartContracts: batchCreateAtomsFromSmartContracts,
