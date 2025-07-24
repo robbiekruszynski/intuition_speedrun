@@ -69,15 +69,41 @@ export function AtomTab() {
     setError(null)
     
     try {
-      console.log('Searching for atom with ID:', searchQuery)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout - request took too long')), 30000)
+      )
       
-      const atom = await getAtom(searchQuery)
-      console.log('SDK response:', atom)
+      const searchPromise = getAtom(searchQuery)
+      
+      const atom = await Promise.race([searchPromise, timeoutPromise])
       
       if (atom) {
+        const cleanAtomData = (data: any) => {
+          if (!data) return 'No description available'
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return 'IPFS Content Available'
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.name) return parsed.name
+                if (parsed.description) return parsed.description
+                return 'Structured Content Available'
+              } catch {
+                return 'Content Available'
+              }
+            }
+            return data
+          }
+          
+          return 'Content Available'
+        }
+
         const transformedAtom = {
-          name: atom.label || atom.data || 'Unnamed Atom',
-          description: atom.data || atom.label || 'No description available',
+          name: cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
+          description: cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
           id: atom.term_id?.toString() || searchQuery,
           creator: atom.creator?.label || 'Unknown',
           createdAt: atom.created_at,
@@ -88,15 +114,24 @@ export function AtomTab() {
           blockNumber: atom.block_number
         }
         
-        console.log('Transformed atom:', transformedAtom)
         setResults([transformedAtom])
       } else {
         setError(`Atom ID ${searchQuery} not found.`)
         setResults([])
       }
     } catch (err) {
-      console.error('Atom search error details:', err)
-      setError(`Failed to search atoms: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      let errorMessage = 'Unknown error'
+      if (err instanceof Error) {
+        if (err.message.includes('timeout')) {
+          errorMessage = 'Search timed out. The request took too long. Please try again.'
+        } else if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(`Failed to search atoms: ${errorMessage}`)
       setResults([])
     } finally {
       setIsLoading(false)
@@ -123,8 +158,6 @@ export function AtomTab() {
     setTransactionHash(null)
     
     try {
-      console.log('Creating basic atom:', { name: createName, description: createDescription })
-      
       const atomData = JSON.stringify({
         name: createName,
         description: createDescription,
@@ -133,9 +166,6 @@ export function AtomTab() {
       })
       
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
-      console.log('Contract address for chain', chainId, ':', ethMultiVaultAddress)
-      console.log('Wallet client:', walletClient)
-      console.log('Public client:', publicClient)
       
       const result = await createAtomFromString(
         {
@@ -146,22 +176,10 @@ export function AtomTab() {
         atomData
       )
       
-      console.log('Atom creation result:', result)
-      console.log('Result state:', result.state)
-      console.log('Result URI:', result.uri)
-      console.log('Result transaction hash:', result.transactionHash)
-      console.log('Full result object:', JSON.stringify(result, (key, value) => 
-        typeof value === 'bigint' ? value.toString() : value, 2))
-      
-      // The SDK gives us a vault ID - this is what you'll use to find your atom later
       const atomId = result.state?.vaultId?.toString() || 
                     result.uri?.split('/').pop() || 
                     result.transactionHash?.slice(0, 8) ||
                     'Unknown'
-      
-      console.log('Extracted atom ID:', atomId)
-      console.log('Vault ID type:', typeof result.state?.vaultId)
-      console.log('Vault ID value:', result.state?.vaultId)
       
       const newAtom = {
         name: createName,
@@ -180,7 +198,6 @@ export function AtomTab() {
       setCreateDescription('')
     } catch (err) {
       setError(`Failed to create atom: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -206,8 +223,6 @@ export function AtomTab() {
     setTransactionHash(null)
     
     try {
-      console.log('Creating atom from IPFS URI:', ipfsContent)
-      
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
       
       const result = await createAtomFromIpfsUri(
@@ -219,17 +234,10 @@ export function AtomTab() {
         ipfsContent as `ipfs://${string}`
       )
       
-      console.log('IPFS atom creation result:', result)
-      console.log('Result state:', result.state)
-      console.log('Result URI:', result.uri)
-      
-      // The SDK gives us a vault ID - this is what you'll use to find your atom later
       const atomId = result.state?.vaultId?.toString() || 
                     result.uri?.split('/').pop() || 
                     result.transactionHash?.slice(0, 8) ||
                     'Unknown'
-      
-      console.log('Extracted atom ID:', atomId)
       
       const newAtom = {
         name: `IPFS Atom - ${Date.now()}`,
@@ -248,7 +256,6 @@ export function AtomTab() {
       setIpfsContent('')
     } catch (err) {
       setError(`Failed to create atom from IPFS URI: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -278,9 +285,6 @@ export function AtomTab() {
     setTransactionHash(null)
     
     try {
-      console.log('Uploading to IPFS and creating atom:', ipfsContent)
-      
-      // First we upload your data to IPFS using Pinata
       const jsonData = {
         name: `IPFS Upload Atom - ${Date.now()}`,
         description: ipfsContent,
@@ -289,7 +293,6 @@ export function AtomTab() {
       }
       
       const pinataResponse = await uploadJsonToPinata(PINATA_CONFIG.apiToken, jsonData)
-      console.log('Pinata upload response:', pinataResponse)
       
       const ipfsUri = `ipfs://${pinataResponse.IpfsHash}`
       
@@ -305,16 +308,10 @@ export function AtomTab() {
         jsonData
       )
       
-      console.log('IPFS upload atom creation result:', result)
-      console.log('Result state:', result.state)
-      console.log('Result URI:', result.uri)
-      
       const atomId = result.state?.vaultId?.toString() || 
                     result.uri?.split('/').pop() || 
                     result.transactionHash?.slice(0, 8) ||
                     'Unknown'
-      
-      console.log('Extracted atom ID:', atomId)
       
       const newAtom = {
         name: jsonData.name,
@@ -334,7 +331,6 @@ export function AtomTab() {
       setIpfsContent('')
     } catch (err) {
       setError(`Failed to upload to IPFS and create atom: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -347,19 +343,40 @@ export function AtomTab() {
     setError(null)
     
     try {
-      console.log('Looking up vault:', vaultLookupId)
-      
       const atom = await getAtom(vaultLookupId)
       
       if (atom) {
+        const cleanAtomData = (data: any) => {
+          if (!data) return 'No description available'
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return 'IPFS Content Available'
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.name) return parsed.name
+                if (parsed.description) return parsed.description
+                return 'Structured Content Available'
+              } catch {
+                return 'Content Available'
+              }
+            }
+            return data
+          }
+          
+          return 'Content Available'
+        }
+
         const transformedAtom = {
-          name: atom.label || atom.data || 'Unnamed Atom',
-          description: atom.data || atom.label || 'No description available',
+          name: cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
+          description: cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
           id: atom.term_id?.toString() || vaultLookupId,
           vaultId: vaultLookupId,
           creator: atom.creator?.label || 'Unknown',
           createdAt: atom.created_at,
-          type: atom.type,
+          type: getAtomTypeDisplay(atom.type),
           emoji: atom.emoji,
           image: atom.image,
           transactionHash: atom.transaction_hash,
@@ -368,7 +385,16 @@ export function AtomTab() {
             positionCount: atom.term.vaults.position_count,
             totalShares: atom.term.vaults.total_shares,
             currentSharePrice: atom.term.vaults.current_share_price,
-            positionsCount: atom.term.vaults.positions_aggregate?.aggregate?.count || 0
+            positionsCount: atom.term.vaults.positions_aggregate?.aggregate?.count || 0,
+            vaultAddress: atom.term.vaults.address,
+            vaultId: atom.term.vaults.id,
+            totalValue: atom.term.vaults.total_value,
+            shareSupply: atom.term.vaults.share_supply,
+            marketCap: atom.term.vaults.market_cap,
+            lastUpdated: atom.term.vaults.last_updated,
+            positions: atom.term.vaults.positions,
+            tradingVolume: atom.term.vaults.trading_volume,
+            priceHistory: atom.term.vaults.price_history
           } : null
         }
         
@@ -378,7 +404,6 @@ export function AtomTab() {
         setResults([])
       }
     } catch (err) {
-      console.error('Vault lookup error:', err)
       setError(`Failed to lookup vault: ${err instanceof Error ? err.message : 'Unknown error'}`)
       setResults([])
     } finally {
@@ -410,28 +435,65 @@ export function AtomTab() {
     setTransactionHash(null)
     
     try {
-      console.log('Creating rich atom with image:', { name: createName, description: createDescription, imageFile })
+      let imageIpfsHash = null
+      
+      if (imageFile) {
+        try {
+          const formData = new FormData()
+          formData.append('file', imageFile)
+          
+          const metadata = JSON.stringify({
+            name: imageFile.name,
+            description: `Image for rich atom: ${createName}`,
+            attributes: {
+              type: 'rich-atom-image',
+              atomName: createName
+            }
+          })
+          formData.append('pinataMetadata', metadata)
+          
+          const uploadResponse = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${PINATA_CONFIG.apiToken}`
+            },
+            body: formData
+          })
+          
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text()
+            throw new Error(`Failed to upload image: ${uploadResponse.status} - ${uploadResponse.statusText}`)
+          }
+          
+          const uploadResult = await uploadResponse.json()
+          imageIpfsHash = uploadResult.IpfsHash
+        } catch (uploadErr) {
+          setError(`Failed to upload image: ${uploadErr instanceof Error ? uploadErr.message : 'Unknown error'}`)
+          return
+        }
+      }
       
       const richData = {
         name: createName,
         description: createDescription,
         type: 'rich-atom',
         createdAt: new Date().toISOString(),
-        hasImage: !!imageFile
+        hasImage: !!imageFile,
+        imageIpfsHash: imageIpfsHash,
+        imageUrl: imageIpfsHash ? `ipfs://${imageIpfsHash}` : null
       }
       
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
       
-      const result = await createAtomFromString(
+      const result = await createAtomFromIpfsUpload(
         {
           walletClient,
           publicClient,
-          address: ethMultiVaultAddress
+          address: ethMultiVaultAddress,
+          pinataApiJWT: PINATA_CONFIG.apiToken
         },
-        JSON.stringify(richData)
+        richData
       )
-      
-      console.log('Rich atom creation result:', result)
       
       const atomId = result.state?.vaultId?.toString() || 
                     result.uri?.split('/').pop() || 
@@ -446,6 +508,10 @@ export function AtomTab() {
         createdAt: new Date().toISOString(),
         type: 'rich-atom',
         hasImage: !!imageFile,
+        imageIpfsHash: imageIpfsHash,
+        imageUrl: imageIpfsHash ? `ipfs://${imageIpfsHash}` : null,
+        metadataIpfsHash: result.ipfsHash,
+        metadataUrl: result.ipfsUrl,
         transactionHash: result.transactionHash,
         uri: result.uri
       }
@@ -457,7 +523,6 @@ export function AtomTab() {
       setImageFile(null)
     } catch (err) {
       setError(`Failed to create rich atom: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -578,30 +643,7 @@ export function AtomTab() {
                       {/* Atom ID Section */}
                       {result.id && (
                         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Atom ID</span>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(result.id)
-                                  const button = event?.target as HTMLButtonElement
-                                  if (button) {
-                                    const originalText = button.textContent
-                                    button.textContent = '✅'
-                                    setTimeout(() => {
-                                      button.textContent = originalText
-                                    }, 1000)
-                                  }
-                                } catch (err) {
-                                  console.error('Failed to copy to clipboard:', err)
-                                }
-                              }}
-                              className="text-gray-400 hover:text-gray-600 transition-colors"
-                              title="Copy Atom ID"
-                            >
-                              📋
-                            </button>
-                          </div>
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 block mb-2">Atom ID</span>
                           <code className="bg-white dark:bg-gray-700 px-3 py-2 rounded border text-sm font-mono text-purple-600 dark:text-purple-400 block">
                             {result.id}
                           </code>
@@ -625,6 +667,49 @@ export function AtomTab() {
                       )}
                     </div>
 
+                    {/* Additional Details */}
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <h6 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Additional Details</h6>
+                      <div className="space-y-1 text-sm">
+                        {result.type && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Type</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.type}</span>
+                          </div>
+                        )}
+                        {result.createdAt && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Created</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">{new Date(result.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                        {result.hasImage && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Has Image</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">✅ Yes</span>
+                          </div>
+                        )}
+                        {result.creator && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Creator</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.creator}</span>
+                          </div>
+                        )}
+                        {result.imageIpfsHash && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Image IPFS</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.imageIpfsHash}</span>
+                          </div>
+                        )}
+                        {result.metadataIpfsHash && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Metadata IPFS</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.metadataIpfsHash}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Vault Information */}
                     {result.vaultInfo && (
                       <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
@@ -632,7 +717,7 @@ export function AtomTab() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           <div>
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Positions</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.positionsCount}</span>
+                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.positionsCount || result.vaultInfo.positionCount || 0}</span>
                           </div>
                           <div>
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Shares</span>
@@ -646,40 +731,33 @@ export function AtomTab() {
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Vault ID</span>
                             <span className="text-orange-800 dark:text-orange-200 font-mono text-xs">{result.vaultId}</span>
                           </div>
+                          {result.vaultInfo.totalValue && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Value</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.totalValue.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.shareSupply && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Share Supply</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.shareSupply.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.marketCap && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Market Cap</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.marketCap.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.tradingVolume && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Trading Volume</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.tradingVolume.toString()}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
-
-                    {/* Additional Details */}
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <h6 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Additional Details</h6>
-                      <div className="space-y-2 text-sm">
-                        {result.type && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Type</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.type}</span>
-                          </div>
-                        )}
-                        {result.createdAt && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Created</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-medium">{new Date(result.createdAt).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {result.hasImage && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Has Image</span>
-                            <span className="text-green-600 dark:text-green-400 font-medium">✅ Yes</span>
-                          </div>
-                        )}
-                        {result.creator && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Creator</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.creator}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -907,7 +985,7 @@ export function AtomTab() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           <div>
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Positions</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.positionsCount}</span>
+                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.positionsCount || result.vaultInfo.positionCount || 0}</span>
                           </div>
                           <div>
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Shares</span>
@@ -921,28 +999,52 @@ export function AtomTab() {
                             <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Vault ID</span>
                             <span className="text-orange-800 dark:text-orange-200 font-mono text-xs">{result.vaultId}</span>
                           </div>
+                          {result.vaultInfo.totalValue && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Value</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.totalValue.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.shareSupply && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Share Supply</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.shareSupply.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.marketCap && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Market Cap</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.marketCap.toString()}</span>
+                            </div>
+                          )}
+                          {result.vaultInfo.tradingVolume && (
+                            <div>
+                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Trading Volume</span>
+                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.tradingVolume.toString()}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
 
                     {/* Additional Vault Details */}
                     <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <h6 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Additional Details</h6>
-                      <div className="space-y-2 text-sm">
+                      <h6 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Additional Details</h6>
+                      <div className="space-y-1 text-sm">
                         {result.id && (
-                          <div className="flex justify-between">
+                          <div className="flex justify-between items-center py-1">
                             <span className="text-gray-600 dark:text-gray-400">Atom/Triple ID</span>
                             <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.id}</span>
                           </div>
                         )}
                         {result.createdAt && (
-                          <div className="flex justify-between">
+                          <div className="flex justify-between items-center py-1">
                             <span className="text-gray-600 dark:text-gray-400">Created</span>
                             <span className="text-gray-900 dark:text-gray-100 font-medium">{new Date(result.createdAt).toLocaleDateString()}</span>
                           </div>
                         )}
                         {result.creator && (
-                          <div className="flex justify-between">
+                          <div className="flex justify-between items-center py-1">
                             <span className="text-gray-600 dark:text-gray-400">Creator</span>
                             <span className="text-gray-900 dark:text-gray-100 font-medium">{result.creator}</span>
                           </div>
