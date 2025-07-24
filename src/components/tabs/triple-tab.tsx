@@ -5,6 +5,7 @@ import { useIntuition } from '@/hooks/use-intuition'
 import { useAccount, useChainId } from 'wagmi'
 import { 
   batchCreateTripleStatements,
+  createTripleStatement,
   getTriple,
   getAtom,
   getEthMultiVaultAddressFromChainId,
@@ -148,9 +149,14 @@ export function TripleTab() {
     try {
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
       
-      const subjectIdBigInt = BigInt(existingSubjectId)
-      const predicateIdBigInt = BigInt(existingPredicateId)
-      const objectIdBigInt = BigInt(existingObjectId)
+      console.log('🔍 DEBUG: About to call batchCreateTripleStatements')
+      console.log('🔍 DEBUG: Config:', {
+        walletClient: !!walletClient,
+        publicClient: !!publicClient,
+        address: ethMultiVaultAddress
+      })
+      console.log('🔍 DEBUG: Data being sent:', [[BigInt(existingSubjectId)], [BigInt(existingPredicateId)], [BigInt(existingObjectId)]])
+      console.log('🔍 DEBUG: Atom IDs:', { existingSubjectId, existingPredicateId, existingObjectId })
       
       const result = await batchCreateTripleStatements(
         {
@@ -158,7 +164,7 @@ export function TripleTab() {
           publicClient,
           address: ethMultiVaultAddress
         },
-        [subjectIdBigInt, predicateIdBigInt, objectIdBigInt]
+        [[BigInt(existingSubjectId)], [BigInt(existingPredicateId)], [BigInt(existingObjectId)]]
       )
       
       const newTriple = {
@@ -166,7 +172,7 @@ export function TripleTab() {
         predicate: `Atom ${existingPredicateId}`,
         object: `Atom ${existingObjectId}`,
         id: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
-        vaultId: result.state[0]?.vaultId?.toString(),
+        vaultId: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
         createdAt: new Date().toISOString(),
         transactionHash: result.transactionHash,
         subjectId: existingSubjectId,
@@ -180,39 +186,11 @@ export function TripleTab() {
       setExistingPredicateId('')
       setExistingObjectId('')
     } catch (err) {
-      try {
-        const result = await batchCreateTripleStatements(
-          {
-            walletClient,
-            publicClient,
-            address: ethMultiVaultAddress
-          },
-          [subjectIdBigInt],
-          [predicateIdBigInt],
-          [objectIdBigInt]
-        )
-        
-        const newTriple = {
-          subject: `Atom ${existingSubjectId}`,
-          predicate: `Atom ${existingPredicateId}`,
-          object: `Atom ${existingObjectId}`,
-          id: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
-          vaultId: result.state[0]?.vaultId?.toString(),
-          createdAt: new Date().toISOString(),
-          transactionHash: result.transactionHash,
-          subjectId: existingSubjectId,
-          predicateId: existingPredicateId,
-          objectId: existingObjectId
-        }
-        
-        setResults(prev => [newTriple, ...prev])
-        setTransactionHash(result.transactionHash)
-        setExistingSubjectId('')
-        setExistingPredicateId('')
-        setExistingObjectId('')
-      } catch (altErr) {
-        setError(`Failed to create triple from existing atoms. Tried multiple formats. Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      }
+      console.log('🔍 DEBUG: Error caught:', err)
+      console.log('🔍 DEBUG: Error type:', typeof err)
+      console.log('🔍 DEBUG: Error message:', err instanceof Error ? err.message : 'Unknown error')
+      console.log('🔍 DEBUG: Full error object:', err)
+      setError(`Failed to create triple from existing atoms: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setIsCreating(false)
     }
@@ -331,6 +309,11 @@ export function TripleTab() {
       
       let result
       let lastError = null
+      
+      console.log('🔍 DEBUG: Working function - trying BigInt format')
+      console.log('🔍 DEBUG: Working function - subjectIdBigInt:', subjectIdBigInt)
+      console.log('🔍 DEBUG: Working function - predicateIdBigInt:', predicateIdBigInt)
+      console.log('🔍 DEBUG: Working function - objectIdBigInt:', objectIdBigInt)
       
       try {
         result = await batchCreateTripleStatements(
@@ -591,14 +574,14 @@ export function TripleTab() {
         
         {/* Toggle for using existing atoms */}
         <div className="mb-4">
-          <label className="flex items-center space-x-2 cursor-pointer">
+          <label className="flex items-center space-x-3 cursor-pointer">
             <input
               type="checkbox"
               checked={useExistingAtoms}
               onChange={(e) => setUseExistingAtoms(e.target.checked)}
-              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 focus:ring-2"
             />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-base font-medium text-gray-700 dark:text-gray-300">
               Use existing atom IDs (saves gas fees)
             </span>
           </label>
@@ -764,7 +747,7 @@ export function TripleTab() {
               <button
                 onClick={handleCreate}
                 disabled={isCreating || !createSubject.trim() || !createPredicate.trim() || !createObject.trim()}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed mt-6"
               >
                 {isCreating ? 'Creating...' : 'Create Triple with New Atoms'}
               </button>
@@ -969,7 +952,6 @@ export function TripleTab() {
           </div>
         )}
 
-        {/* Vault Results */}
         {results.length > 0 && (
           <div className="mt-4">
             <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Results</h4>
@@ -977,7 +959,7 @@ export function TripleTab() {
               {results.map((result, index) => (
                 <div key={index} className="bg-white dark:bg-gray-700 p-6 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
                   <div className="space-y-4">
-                    {/* Vault Information */}
+                  
                     {result.vaultInfo && (
                       <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
                         <h6 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-3">Vault Information</h6>
@@ -1002,7 +984,6 @@ export function TripleTab() {
                       </div>
                     )}
 
-                    {/* Additional Vault Details */}
                     <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
                       <h6 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Additional Details</h6>
                       <div className="space-y-1 text-sm">
