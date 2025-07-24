@@ -101,9 +101,41 @@ export function AtomTab() {
           return 'Content Available'
         }
 
+        const parseAtomContent = (data: any) => {
+          if (!data) return { content: 'No content available', type: 'empty' }
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return { content: data, type: 'ipfs-hash' }
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                return { 
+                  content: parsed, 
+                  type: 'json',
+                  name: parsed.name,
+                  description: parsed.description,
+                  type: parsed.type,
+                  createdAt: parsed.createdAt,
+                  hasImage: parsed.hasImage,
+                  imageUrl: parsed.imageUrl
+                }
+              } catch {
+                return { content: data, type: 'text' }
+              }
+            }
+            return { content: data, type: 'text' }
+          }
+          
+          return { content: data, type: 'object' }
+        }
+
+        const atomContent = parseAtomContent(atom.data || atom.label)
+        
         const transformedAtom = {
-          name: cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
-          description: cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
+          name: atomContent.name || cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
+          description: atomContent.description || cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
           id: atom.term_id?.toString() || searchQuery,
           creator: atom.creator?.label || 'Unknown',
           createdAt: atom.created_at,
@@ -111,7 +143,10 @@ export function AtomTab() {
           emoji: atom.emoji,
           image: atom.image,
           transactionHash: atom.transaction_hash,
-          blockNumber: atom.block_number
+          blockNumber: atom.block_number,
+          atomContent: atomContent,
+          hasImage: atomContent.hasImage,
+          imageUrl: atomContent.imageUrl
         }
         
         setResults([transformedAtom])
@@ -695,20 +730,89 @@ export function AtomTab() {
                             <span className="text-gray-900 dark:text-gray-100 font-medium">{result.creator}</span>
                           </div>
                         )}
-                        {result.imageIpfsHash && (
+                        {result.atomContent?.type === 'ipfs-hash' && (
                           <div className="flex justify-between items-center py-1">
-                            <span className="text-gray-600 dark:text-gray-400">Image IPFS</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.imageIpfsHash}</span>
+                            <span className="text-gray-600 dark:text-gray-400">IPFS Hash</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.atomContent.content}</span>
                           </div>
                         )}
-                        {result.metadataIpfsHash && (
+                        {result.atomContent?.type === 'json' && result.atomContent.content?.type && (
                           <div className="flex justify-between items-center py-1">
-                            <span className="text-gray-600 dark:text-gray-400">Metadata IPFS</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.metadataIpfsHash}</span>
+                            <span className="text-gray-600 dark:text-gray-400">Content Type</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.atomContent.content.type}</span>
+                          </div>
+                        )}
+                        {result.atomContent?.type === 'json' && result.atomContent.content?.createdAt && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Content Created</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">{new Date(result.atomContent.content.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                        {result.imageUrl && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-gray-600 dark:text-gray-400">Image URL</span>
+                            <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{result.imageUrl}</span>
                           </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Atom Content Details */}
+                    {result.atomContent && result.atomContent.type !== 'empty' && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <h6 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3">Atom Content Details</h6>
+                        {result.atomContent.type === 'json' && (
+                          <div className="space-y-2">
+                            <div className="bg-white dark:bg-gray-700 p-3 rounded border">
+                              <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">Structured Data</div>
+                              <div className="space-y-1 text-xs">
+                                {result.atomContent.content.name && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.name}</span>
+                                  </div>
+                                )}
+                                {result.atomContent.content.description && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Description:</span>
+                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.description}</span>
+                                  </div>
+                                )}
+                                {result.atomContent.content.type && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Type:</span>
+                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.type}</span>
+                                  </div>
+                                )}
+                                {result.atomContent.content.hasImage && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Has Image:</span>
+                                    <span className="text-green-600 dark:text-green-400">✅ Yes</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {result.atomContent.type === 'ipfs-hash' && (
+                          <div className="bg-white dark:bg-gray-700 p-3 rounded border">
+                            <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">IPFS Content</div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">This atom contains IPFS content with hash:</div>
+                            <code className="bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-xs font-mono text-blue-600 dark:text-blue-400 block break-all">
+                              {result.atomContent.content}
+                            </code>
+                          </div>
+                        )}
+                        {result.atomContent.type === 'text' && (
+                          <div className="bg-white dark:bg-gray-700 p-3 rounded border">
+                            <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">Text Content</div>
+                            <div className="text-sm text-gray-700 dark:text-gray-300">
+                              {result.atomContent.content}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Vault Information */}
                     {result.vaultInfo && (
