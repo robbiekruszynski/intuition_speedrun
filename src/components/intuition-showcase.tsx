@@ -1,19 +1,35 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AtomTab } from './tabs/atom-tab'
 import { TripleTab } from './tabs/triple-tab'
-import { VaultTab } from './tabs/vault-tab'
+import { UseCasesTab } from './tabs/vault-tab'
 
-type TabType = 'atoms' | 'triples' | 'vaults'
+type TabType = 'atoms' | 'triples' | 'use-cases'
 
 export function IntuitionShowcase() {
   const [activeTab, setActiveTab] = useState<TabType>('atoms')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   const tabs = [
     { id: 'atoms', label: 'Atoms', icon: '⚛️' },
     { id: 'triples', label: 'Triples', icon: '🔗' },
-    { id: 'vaults', label: 'Vaults', icon: '🏦' },
+    { id: 'use-cases', label: 'Use Cases', icon: '💡' },
   ] as const
 
   return (
@@ -22,7 +38,7 @@ export function IntuitionShowcase() {
       
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Intuition SDK Showcase
+            Intuition Speed Run
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Speed Run
@@ -53,7 +69,7 @@ export function IntuitionShowcase() {
         <div className="bg-white rounded-xl shadow-lg p-6">
           {activeTab === 'atoms' && <AtomTab />}
           {activeTab === 'triples' && <TripleTab />}
-          {activeTab === 'vaults' && <VaultTab />}
+          {activeTab === 'use-cases' && <UseCasesTab />}
         </div>
       </div>
     </div>
