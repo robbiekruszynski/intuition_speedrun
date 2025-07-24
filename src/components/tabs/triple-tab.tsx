@@ -134,7 +134,6 @@ export function TripleTab() {
       const triple = await getTriple(searchQuery)
       
       if (triple) {
-        // Fetch the actual atom data for better display
         let subjectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
         let predicateAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
         let objectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
@@ -222,8 +221,6 @@ export function TripleTab() {
     try {
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
       
-
-      
       const result = await batchCreateTripleStatements(
         {
           walletClient,
@@ -254,17 +251,13 @@ export function TripleTab() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       
-      // Check if this is a "triple already exists" error
       if (errorMessage.includes('EthMultiVault_TripleExists')) {
-        // Extract the atom IDs from the error message
         const match = errorMessage.match(/\((\d+), (\d+), (\d+)\)/)
         if (match) {
           const [_, subjectId, predicateId, objectId] = match
           
-          // Create a user-friendly message
           setError(`✅ Triple already exists! This combination of atoms has already been used to create a triple.`)
           
-          // Fetch the actual atom data for better display
           let subjectAtomInfo = { name: `Atom ${subjectId}`, description: '', type: 'Unknown' }
           let predicateAtomInfo = { name: `Atom ${predicateId}`, description: '', type: 'Unknown' }
           let objectAtomInfo = { name: `Atom ${objectId}`, description: '', type: 'Unknown' }
@@ -273,24 +266,23 @@ export function TripleTab() {
             const subjectAtom = await getAtom(subjectId)
             subjectAtomInfo = parseAtomData(subjectAtom?.data || subjectAtom)
           } catch (err) {
-            // Keep default values
+            
           }
           
           try {
             const predicateAtom = await getAtom(predicateId)
             predicateAtomInfo = parseAtomData(predicateAtom?.data || predicateAtom)
           } catch (err) {
-            // Keep default values
+           
           }
           
           try {
             const objectAtom = await getAtom(objectId)
             objectAtomInfo = parseAtomData(objectAtom?.data || objectAtom)
           } catch (err) {
-            // Keep default values
+        
           }
           
-          // Show the existing triple information
           const existingTriple = {
             subject: subjectAtomInfo.name,
             predicate: predicateAtomInfo.name,
@@ -427,12 +419,8 @@ export function TripleTab() {
       const predicateIdBigInt = typeof predicateId === 'string' ? BigInt(predicateId) : BigInt(predicateId.toString())
       const objectIdBigInt = typeof objectId === 'string' ? BigInt(objectId) : BigInt(objectId.toString())
       
-
-      
       let result
       let lastError = null
-      
-
       
       try {
         result = await batchCreateTripleStatements(
@@ -605,14 +593,13 @@ export function TripleTab() {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Triples</h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Triples represent relationships between atoms in the form of Subject-Predicate-Object.
-        </p>
-        
- 
-        {!isConnected ? (
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Triples</h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Triples represent relationships between atoms in the form of Subject-Predicate-Object.
+          </p>
+          
+          {!isConnected ? (
           <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <p className="text-yellow-700 text-sm">⚠️ Please connect your wallet to create triples</p>
           </div>
@@ -621,12 +608,11 @@ export function TripleTab() {
             <p className="text-red-700 text-sm">❌ Please switch to a supported network: Sepolia, Arbitrum Sepolia, or Base Sepolia</p>
           </div>
         ) : (
-          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-            <p className="text-green-700 text-sm">✅ Connected to {getIntuitionConfig(chainId)?.name} - Ready to create triples!</p>
+          <div className="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
+            <p className="text-green-700 dark:text-green-300 text-sm">✅ Connected to {getIntuitionConfig(chainId)?.name} - Ready to create triples!</p>
           </div>
         )}
         
- 
         {transactionHash && (
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-blue-700 text-sm">
@@ -643,8 +629,6 @@ export function TripleTab() {
           </div>
         )}
       </div>
-
-
 
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search Triples</h3>
@@ -667,11 +651,10 @@ export function TripleTab() {
         </div>
       </div>
 
-    
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Create New Triple</h3>
         
-        {/* Instructions */}
+   
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
           <h4 className="text-sm font-semibold text-blue-800 dark:text-white mb-2">📝 How to Create Triples</h4>
           <p className="text-sm text-blue-700 dark:text-white leading-relaxed">
@@ -691,7 +674,7 @@ export function TripleTab() {
           </div>
         </div>
         
-        {/* Toggle for using existing atoms */}
+      
         <div className="mb-4">
           <label className="flex items-center space-x-3 cursor-pointer">
             <input
@@ -699,7 +682,6 @@ export function TripleTab() {
               checked={useExistingAtoms}
               onChange={(e) => {
                 setUseExistingAtoms(e.target.checked)
-                // Clear atom creation status when switching modes
                 if (e.target.checked) {
                   setAtomCreationStatus({})
                 }
@@ -770,7 +752,7 @@ export function TripleTab() {
           </div>
         )}
         
-        {/* Triple Creation Status - Show when using existing atoms */}
+       
         {useExistingAtoms && isCreating && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
             <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3">
@@ -917,9 +899,9 @@ export function TripleTab() {
             {results.map((result, index) => (
               <div key={index} className="bg-white dark:bg-gray-700 p-6 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
                 <div className="space-y-4">
-                  {/* Key Information Grid */}
+             
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Triple ID Section */}
+                 
                     {result.id && (
                       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
                         <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 block mb-2">Triple ID</span>
@@ -929,7 +911,7 @@ export function TripleTab() {
                       </div>
                     )}
 
-                    {/* Transaction Section */}
+                
                     {result.transactionHash && (
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
                         <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 block mb-2">Transaction</span>
@@ -946,7 +928,7 @@ export function TripleTab() {
                     )}
                   </div>
 
-                  {/* Triple Relationship Display */}
+                 
                   <div className="bg-gradient-to-r from-purple-50 dark:from-purple-900/20 to-blue-50 dark:to-blue-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
                     <div className="flex items-center justify-center gap-2 mb-3">
                       <h6 className="text-sm font-semibold text-purple-800 dark:text-purple-300">Triple Relationship</h6>
@@ -993,7 +975,7 @@ export function TripleTab() {
                       </div>
                     </div>
                     
-                    {/* Atom Details */}
+                   
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-700">
                         <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">Subject Atom</div>
