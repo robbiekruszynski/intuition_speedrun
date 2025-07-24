@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Intuition SDK Showcase
+
+A polished showcase application demonstrating the power of [Intuition Systems](https://www.intuition.systems/) SDK. This project provides a comprehensive walkthrough of Intuition's token-curated knowledge graph capabilities.
+
+## Features
+
+- **Wallet Integration**: Connect with any Web3 wallet using RainbowKit v2
+- **Atoms**: Search and create fundamental units of knowledge
+- **Triples**: Build relationships between atoms (Subject-Predicate-Object)
+- **Vaults**: Organize and monetize collections of atoms and triples
+- **Modern UI**: Polished interface with tabs and responsive design
+
+## Tech Stack
+
+- **Next.js 15** with TypeScript and App Router
+- **RainbowKit v2** for wallet connectivity
+- **Tailwind CSS** for styling
+- **Intuition SDK** (@0xintuition/sdk) for knowledge graph operations
 
 ## Getting Started
 
-First, run the development server:
+1. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+2. **Set up environment**:
+   ```bash
+   # Create .env.local with your WalletConnect project ID
+   echo "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id" > .env.local
+   ```
+
+3. **Run the development server**:
+   ```bash
+   pnpm dev
+   ```
+
+4. **Open your browser** and navigate to `http://localhost:3000`
+
+## Project Structure
+
+```
+src/
+├── app/                    # Next.js app router
+├── components/
+│   ├── tabs/              # Tab components for Atoms, Triples, Vaults
+│   ├── intuition-showcase.tsx
+│   └── wallet-connect.tsx
+├── hooks/
+│   └── use-intuition.ts   # Intuition SDK integration
+└── providers/
+    └── rainbowkit-provider.tsx
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## SDK Integration Status
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The showcase is currently set up with placeholder implementations. The Intuition SDK is installed and ready for integration:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- ✅ SDK installed and initialized
+- ✅ UI components created
+- ✅ Error handling implemented
+- 🔄 SDK method implementations (in progress)
 
-## Learn More
+## Next Steps
 
-To learn more about Next.js, take a look at the following resources:
+1. Implement actual SDK method calls
+2. Add code snippets for developers
+3. Create comprehensive documentation
+4. Add more advanced features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Contributing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This is a showcase project for the Intuition SDK. The SDK itself should never be modified - only used as a dependency.
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

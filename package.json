@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@0xintuition/sdk": "1.0.0-alpha.2",
     "@rainbow-me/rainbowkit": "2",
     "@tanstack/react-query": "^5.83.0",
     "next": "15.4.3",
