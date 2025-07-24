@@ -3,7 +3,7 @@ import { Navbar } from "@/components/navbar";
 
 export default function Home() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Navbar with Wallet Connection */}
       <Navbar />
       

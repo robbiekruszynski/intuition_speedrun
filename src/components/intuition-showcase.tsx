@@ -17,10 +17,10 @@ export function IntuitionShowcase() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     )
@@ -33,29 +33,29 @@ export function IntuitionShowcase() {
   ] as const
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="max-w-6xl mx-auto p-8">
       
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Intuition Speed Run
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Intuition SpeedRun
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Speed Run
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Explore the Intuition SDK - Create atoms, triples, and discover real-world use cases
           </p>
         </div>
 
  
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md font-medium transition-all duration-200 ${
                   activeTab === tab.id
-                    ? 'bg-white text-purple-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
                 <span className="text-lg">{tab.icon}</span>
@@ -66,7 +66,7 @@ export function IntuitionShowcase() {
         </div>
 
        
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
           {activeTab === 'atoms' && <AtomTab />}
           {activeTab === 'triples' && <TripleTab />}
           {activeTab === 'use-cases' && <UseCasesTab />}

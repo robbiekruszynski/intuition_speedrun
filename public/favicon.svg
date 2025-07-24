@@ -1,0 +1,22 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="6" fill="#8B5CF6"/>
+  
+  <!-- Intuition brain/lightbulb icon -->
+  <g transform="translate(6, 6)">
+    <!-- Brain/lightbulb shape -->
+    <path d="M10 2C10 1.44772 10.4477 1 11 1H9C9.55228 1 10 1.44772 10 2V4C10 4.55228 9.55228 5 9 5H11C10.4477 5 10 4.55228 10 4V2Z" fill="white"/>
+    
+    <!-- Brain curves -->
+    <path d="M6 6C6 4.89543 6.89543 4 8 4H12C13.1046 4 14 4.89543 14 6V8C14 9.10457 13.1046 10 12 10H8C6.89543 10 6 9.10457 6 8V6Z" fill="white"/>
+    
+    <!-- Connection points -->
+    <circle cx="7" cy="7" r="1" fill="#8B5CF6"/>
+    <circle cx="13" cy="7" r="1" fill="#8B5CF6"/>
+    <circle cx="10" cy="9" r="1" fill="#8B5CF6"/>
+    
+    <!-- Sparkle effect -->
+    <path d="M15 3L16 2L15 1L14 2L15 3Z" fill="white"/>
+    <path d="M5 3L6 2L5 1L4 2L5 3Z" fill="white"/>
+    <path d="M10 12L11 11L10 10L9 11L10 12Z" fill="white"/>
+  </g>
+</svg> 

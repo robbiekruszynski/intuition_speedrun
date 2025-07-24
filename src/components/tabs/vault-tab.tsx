@@ -130,16 +130,16 @@ export function UseCasesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 pb-4">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Real-World Use Cases</h2>
-        <p className="text-gray-600">
+      <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Real-World Use Cases</h2>
+        <p className="text-gray-600 dark:text-gray-400">
           Discover how the Intuition SDK can be used to build powerful decentralized applications across various industries.
         </p>
       </div>
 
       {/* Category Filter */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">Filter by Category</h3>
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Filter by Category</h3>
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
             <button
@@ -148,7 +148,7 @@ export function UseCasesTab() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedCategory === category.id
                   ? 'bg-purple-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               {category.name}
@@ -160,17 +160,17 @@ export function UseCasesTab() {
       {/* Use Cases Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {filteredUseCases.map((useCase, index) => (
-          <div key={index} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">{useCase.title}</h3>
-            <p className="text-gray-600 mb-4">{useCase.description}</p>
+          <div key={index} className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-6 hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{useCase.title}</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{useCase.description}</p>
             
             <div className="space-y-4">
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Examples:</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Examples:</h4>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                   {useCase.examples.map((example, idx) => (
                     <li key={idx} className="flex items-start">
-                      <span className="text-purple-500 mr-2">•</span>
+                      <span className="text-purple-500 dark:text-purple-400 mr-2">•</span>
                       {example}
                     </li>
                   ))}
@@ -178,11 +178,11 @@ export function UseCasesTab() {
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Key Benefits:</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Key Benefits:</h4>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                   {useCase.benefits.map((benefit, idx) => (
                     <li key={idx} className="flex items-start">
-                      <span className="text-green-500 mr-2">✓</span>
+                      <span className="text-green-500 dark:text-green-400 mr-2">✓</span>
                       {benefit}
                     </li>
                   ))}
@@ -190,10 +190,10 @@ export function UseCasesTab() {
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">SDK Features Used:</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">SDK Features Used:</h4>
                 <div className="flex flex-wrap gap-2">
                   {useCase.sdkFeatures.map((feature, idx) => (
-                    <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                    <span key={idx} className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-xs rounded-full">
                       {feature}
                     </span>
                   ))}
@@ -205,18 +205,18 @@ export function UseCasesTab() {
       </div>
 
       {/* Getting Started */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-blue-900 mb-3">Ready to Build?</h3>
-        <p className="text-blue-700 mb-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">Ready to Build?</h3>
+        <p className="text-blue-700 dark:text-blue-300 mb-4">
           Start building your own decentralized application using the Intuition SDK. 
           Each use case above demonstrates how atoms, triples, and vaults can be combined 
           to create powerful, verifiable, and monetizable knowledge systems.
         </p>
         <div className="flex flex-wrap gap-2">
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">Atoms for Data</span>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">Triples for Relationships</span>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">Vaults for Monetization</span>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">IPFS for Storage</span>
+          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-sm rounded-full">Atoms for Data</span>
+          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-sm rounded-full">Triples for Relationships</span>
+          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-sm rounded-full">Vaults for Monetization</span>
+          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-sm rounded-full">IPFS for Storage</span>
         </div>
       </div>
     </div>

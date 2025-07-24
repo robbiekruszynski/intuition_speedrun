@@ -77,10 +77,10 @@ export function WalletConnect() {
         <div className="relative">
           <button
             onClick={() => setIsWalletInfoOpen(!isWalletInfoOpen)}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
           >
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium text-gray-700">{formatAddress(address)}</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{formatAddress(address)}</span>
             <span className="text-lg">{getNetworkIcon(chainId)}</span>
             <span className={`transform transition-transform duration-200 ${isWalletInfoOpen ? 'rotate-180' : ''}`}>
               ▼
@@ -89,27 +89,27 @@ export function WalletConnect() {
           
   
           {isWalletInfoOpen && (
-            <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-gray-200 min-w-[280px] z-50">
+            <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 min-w-[280px] z-50">
               <div className="p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-xs font-medium">Network</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm">{getNetworkIcon(chainId)}</span>
-                    <span className="text-gray-900 text-xs">{getNetworkName(chainId)}</span>
+                                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 dark:text-gray-400 text-xs font-medium">Network</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">{getNetworkIcon(chainId)}</span>
+                      <span className="text-gray-900 dark:text-gray-100 text-xs">{getNetworkName(chainId)}</span>
+                    </div>
                   </div>
-                </div>
 
        
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-xs font-medium">Balance</span>
-                  <span className="text-gray-900 text-xs font-medium">
+                  <span className="text-gray-600 dark:text-gray-400 text-xs font-medium">Balance</span>
+                  <span className="text-gray-900 dark:text-gray-100 text-xs font-medium">
                     {balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : 'Loading...'}
                   </span>
                 </div>
 
   
-                <div className="pt-2 border-t border-gray-100">
-                  <span className="text-gray-600 text-xs font-medium block mb-2">Switch Network</span>
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-600">
+                  <span className="text-gray-600 dark:text-gray-400 text-xs font-medium block mb-2">Switch Network</span>
                   <div className="grid grid-cols-2 gap-1">
                     {[
                       { id: 1, name: 'Ethereum', icon: '🔷' },
@@ -125,8 +125,8 @@ export function WalletConnect() {
                         disabled={isSwitching || chainId === network.id}
                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all duration-200 ${
                           chainId === network.id
-                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700'
+                            : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                         } ${isSwitching ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <span className="text-xs">{network.icon}</span>
@@ -135,7 +135,7 @@ export function WalletConnect() {
                     ))}
                   </div>
                   {isSwitching && (
-                    <p className="text-xs text-gray-500 mt-1 text-center">Switching...</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">Switching...</p>
                   )}
                 </div>
               </div>
