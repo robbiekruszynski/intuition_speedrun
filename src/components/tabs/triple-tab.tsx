@@ -89,6 +89,41 @@ export function TripleTab() {
     return 'Atom'
   }
 
+  const parseAtomData = (atomData: any) => {
+    if (!atomData) return { name: 'Unknown', description: '', type: 'Unknown' }
+    
+    try {
+      if (typeof atomData === 'string') {
+        const parsed = JSON.parse(atomData)
+        return {
+          name: parsed.name || parsed.label || 'Unnamed Atom',
+          description: parsed.description || parsed.data || '',
+          type: parsed.type || 'Unknown',
+          createdAt: parsed.createdAt || parsed.created_at || '',
+          hasImage: parsed.hasImage || false,
+          imageUrl: parsed.imageUrl || parsed.image || null
+        }
+      }
+      return {
+        name: atomData.name || atomData.label || 'Unnamed Atom',
+        description: atomData.description || atomData.data || '',
+        type: atomData.type || 'Unknown',
+        createdAt: atomData.createdAt || atomData.created_at || '',
+        hasImage: atomData.hasImage || false,
+        imageUrl: atomData.imageUrl || atomData.image || null
+      }
+    } catch (err) {
+      return {
+        name: atomData?.label || atomData?.data || 'Unnamed Atom',
+        description: '',
+        type: 'Unknown',
+        createdAt: '',
+        hasImage: false,
+        imageUrl: null
+      }
+    }
+  }
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     
@@ -99,16 +134,54 @@ export function TripleTab() {
       const triple = await getTriple(searchQuery)
       
       if (triple) {
+        // Fetch the actual atom data for better display
+        let subjectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
+        let predicateAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
+        let objectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
+        
+        try {
+          if (triple.subject_id) {
+            const subjectAtom = await getAtom(triple.subject_id.toString())
+            subjectAtomInfo = parseAtomData(subjectAtom?.data || subjectAtom)
+          }
+        } catch (err) {
+          subjectAtomInfo = { name: `Atom ${triple.subject_id}`, description: '', type: 'Unknown' }
+        }
+        
+        try {
+          if (triple.predicate_id) {
+            const predicateAtom = await getAtom(triple.predicate_id.toString())
+            predicateAtomInfo = parseAtomData(predicateAtom?.data || predicateAtom)
+          }
+        } catch (err) {
+          predicateAtomInfo = { name: `Atom ${triple.predicate_id}`, description: '', type: 'Unknown' }
+        }
+        
+        try {
+          if (triple.object_id) {
+            const objectAtom = await getAtom(triple.object_id.toString())
+            objectAtomInfo = parseAtomData(objectAtom?.data || objectAtom)
+          }
+        } catch (err) {
+          objectAtomInfo = { name: `Atom ${triple.object_id}`, description: '', type: 'Unknown' }
+        }
+        
         const transformedTriple = {
-          subject: triple.subject?.label || triple.subject?.data || 'Unknown',
-          predicate: triple.predicate?.label || triple.predicate?.data || 'Unknown',
-          object: triple.object?.label || triple.object?.data || 'Unknown',
+          subject: subjectAtomInfo.name,
+          predicate: predicateAtomInfo.name,
+          object: objectAtomInfo.name,
           id: triple.term_id?.toString() || searchQuery,
           transactionHash: triple.transaction_hash,
           blockNumber: triple.block_number,
           creator: triple.creator?.label || 'Unknown',
           createdAt: triple.created_at,
-          type: getTripleTypeDisplay(triple.type)
+          type: getTripleTypeDisplay(triple.type),
+          subjectId: triple.subject_id?.toString(),
+          predicateId: triple.predicate_id?.toString(),
+          objectId: triple.object_id?.toString(),
+          subjectAtomInfo,
+          predicateAtomInfo,
+          objectAtomInfo
         }
         
         setResults([transformedTriple])
@@ -149,14 +222,7 @@ export function TripleTab() {
     try {
       const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
       
-      console.log('🔍 DEBUG: About to call batchCreateTripleStatements')
-      console.log('🔍 DEBUG: Config:', {
-        walletClient: !!walletClient,
-        publicClient: !!publicClient,
-        address: ethMultiVaultAddress
-      })
-      console.log('🔍 DEBUG: Data being sent:', [[BigInt(existingSubjectId)], [BigInt(existingPredicateId)], [BigInt(existingObjectId)]])
-      console.log('🔍 DEBUG: Atom IDs:', { existingSubjectId, existingPredicateId, existingObjectId })
+
       
       const result = await batchCreateTripleStatements(
         {
@@ -186,11 +252,67 @@ export function TripleTab() {
       setExistingPredicateId('')
       setExistingObjectId('')
     } catch (err) {
-      console.log('🔍 DEBUG: Error caught:', err)
-      console.log('🔍 DEBUG: Error type:', typeof err)
-      console.log('🔍 DEBUG: Error message:', err instanceof Error ? err.message : 'Unknown error')
-      console.log('🔍 DEBUG: Full error object:', err)
-      setError(`Failed to create triple from existing atoms: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      // Check if this is a "triple already exists" error
+      if (errorMessage.includes('EthMultiVault_TripleExists')) {
+        // Extract the atom IDs from the error message
+        const match = errorMessage.match(/\((\d+), (\d+), (\d+)\)/)
+        if (match) {
+          const [_, subjectId, predicateId, objectId] = match
+          
+          // Create a user-friendly message
+          setError(`✅ Triple already exists! This combination of atoms has already been used to create a triple.`)
+          
+          // Fetch the actual atom data for better display
+          let subjectAtomInfo = { name: `Atom ${subjectId}`, description: '', type: 'Unknown' }
+          let predicateAtomInfo = { name: `Atom ${predicateId}`, description: '', type: 'Unknown' }
+          let objectAtomInfo = { name: `Atom ${objectId}`, description: '', type: 'Unknown' }
+          
+          try {
+            const subjectAtom = await getAtom(subjectId)
+            subjectAtomInfo = parseAtomData(subjectAtom?.data || subjectAtom)
+          } catch (err) {
+            // Keep default values
+          }
+          
+          try {
+            const predicateAtom = await getAtom(predicateId)
+            predicateAtomInfo = parseAtomData(predicateAtom?.data || predicateAtom)
+          } catch (err) {
+            // Keep default values
+          }
+          
+          try {
+            const objectAtom = await getAtom(objectId)
+            objectAtomInfo = parseAtomData(objectAtom?.data || objectAtom)
+          } catch (err) {
+            // Keep default values
+          }
+          
+          // Show the existing triple information
+          const existingTriple = {
+            subject: subjectAtomInfo.name,
+            predicate: predicateAtomInfo.name,
+            object: objectAtomInfo.name,
+            id: `existing-triple-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            subjectId: subjectId,
+            predicateId: predicateId,
+            objectId: objectId,
+            isExisting: true,
+            subjectAtomInfo,
+            predicateAtomInfo,
+            objectAtomInfo
+          }
+          
+          setResults(prev => [existingTriple, ...prev])
+        } else {
+          setError(`✅ Triple already exists! This combination of atoms has already been used to create a triple.`)
+        }
+      } else {
+        setError(`Failed to create triple from existing atoms: ${errorMessage}`)
+      }
     } finally {
       setIsCreating(false)
     }
@@ -310,10 +432,7 @@ export function TripleTab() {
       let result
       let lastError = null
       
-      console.log('🔍 DEBUG: Working function - trying BigInt format')
-      console.log('🔍 DEBUG: Working function - subjectIdBigInt:', subjectIdBigInt)
-      console.log('🔍 DEBUG: Working function - predicateIdBigInt:', predicateIdBigInt)
-      console.log('🔍 DEBUG: Working function - objectIdBigInt:', objectIdBigInt)
+
       
       try {
         result = await batchCreateTripleStatements(
@@ -578,7 +697,13 @@ export function TripleTab() {
             <input
               type="checkbox"
               checked={useExistingAtoms}
-              onChange={(e) => setUseExistingAtoms(e.target.checked)}
+              onChange={(e) => {
+                setUseExistingAtoms(e.target.checked)
+                // Clear atom creation status when switching modes
+                if (e.target.checked) {
+                  setAtomCreationStatus({})
+                }
+              }}
               className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 focus:ring-2"
             />
             <span className="text-base font-medium text-gray-700 dark:text-gray-300">
@@ -587,8 +712,8 @@ export function TripleTab() {
           </label>
         </div>
         
-        {/* Atom Creation Status */}
-        {(isCreating || Object.keys(atomCreationStatus).length > 0) && (
+        {/* Status Messages */}
+        {!useExistingAtoms && (isCreating || Object.keys(atomCreationStatus).length > 0) && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-4">
             <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-3">
               {isCreating ? '🔄 Creating Atoms...' : '✅ Atoms Created Successfully'}
@@ -641,6 +766,18 @@ export function TripleTab() {
                   <strong>💡 Note:</strong> These atoms were created successfully and can be used to create triples manually later, even if the automatic triple creation failed.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        
+        {/* Triple Creation Status - Show when using existing atoms */}
+        {useExistingAtoms && isCreating && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
+            <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3">
+              🔄 Creating Triple from Existing Atoms...
+            </h4>
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              Using existing atoms with IDs: {existingSubjectId}, {existingPredicateId}, {existingObjectId}
             </div>
           </div>
         )}
@@ -765,6 +902,17 @@ export function TripleTab() {
       {results.length > 0 && (
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Results</h3>
+          {results.some(r => r.isExisting) && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-green-600 dark:text-green-400">✅</span>
+                <div className="text-sm text-green-700 dark:text-green-300">
+                  <strong>Triple Already Exists:</strong> This combination of atoms has already been used to create a triple. 
+                  The system prevents duplicate triples to maintain data integrity.
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-4">
             {results.map((result, index) => (
               <div key={index} className="bg-white dark:bg-gray-700 p-6 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
@@ -800,18 +948,111 @@ export function TripleTab() {
 
                   {/* Triple Relationship Display */}
                   <div className="bg-gradient-to-r from-purple-50 dark:from-purple-900/20 to-blue-50 dark:to-blue-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                    <h6 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-3 text-center">Triple Relationship</h6>
-                    <div className="flex items-center justify-center gap-3 text-lg">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <h6 className="text-sm font-semibold text-purple-800 dark:text-purple-300">Triple Relationship</h6>
+                      {result.isExisting && (
+                        <span className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-1 rounded-full">
+                          ✅ Existing
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Main Relationship Flow */}
+                    <div className="flex items-center justify-center gap-3 text-lg mb-4">
                       <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border shadow-sm">
-                        <span className="font-semibold text-purple-700 dark:text-purple-300">{result.subject}</span>
+                        <div className="font-semibold text-purple-700 dark:text-purple-300">
+                          {result.subjectAtomInfo?.name || result.subject}
+                        </div>
+                        {result.subjectAtomInfo?.description && (
+                          <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                            {result.subjectAtomInfo.description}
+                          </div>
+                        )}
                       </div>
                       <span className="text-2xl text-gray-400">→</span>
                       <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border shadow-sm">
-                        <span className="font-semibold text-blue-700 dark:text-blue-300">{result.predicate}</span>
+                        <div className="font-semibold text-blue-700 dark:text-blue-300">
+                          {result.predicateAtomInfo?.name || result.predicate}
+                        </div>
+                        {result.predicateAtomInfo?.description && (
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            {result.predicateAtomInfo.description}
+                          </div>
+                        )}
                       </div>
                       <span className="text-2xl text-gray-400">→</span>
                       <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg border shadow-sm">
-                        <span className="font-semibold text-green-700 dark:text-green-300">{result.object}</span>
+                        <div className="font-semibold text-green-700 dark:text-green-300">
+                          {result.objectAtomInfo?.name || result.object}
+                        </div>
+                        {result.objectAtomInfo?.description && (
+                          <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                            {result.objectAtomInfo.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Atom Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-700">
+                        <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">Subject Atom</div>
+                        <div className="text-purple-800 dark:text-purple-200 font-medium">{result.subject}</div>
+                        {result.subjectAtomInfo?.description && (
+                          <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                            {result.subjectAtomInfo.description}
+                          </div>
+                        )}
+                        {result.subjectAtomInfo?.type && (
+                          <div className="text-xs text-purple-500 dark:text-purple-300 mt-1">
+                            Type: {getAtomTypeDisplay(result.subjectAtomInfo.type)}
+                          </div>
+                        )}
+                        {result.subjectId && (
+                          <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                            ID: {result.subjectId}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">Predicate Atom</div>
+                        <div className="text-blue-800 dark:text-blue-200 font-medium">{result.predicate}</div>
+                        {result.predicateAtomInfo?.description && (
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            {result.predicateAtomInfo.description}
+                          </div>
+                        )}
+                        {result.predicateAtomInfo?.type && (
+                          <div className="text-xs text-blue-500 dark:text-blue-300 mt-1">
+                            Type: {getAtomTypeDisplay(result.predicateAtomInfo.type)}
+                          </div>
+                        )}
+                        {result.predicateId && (
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            ID: {result.predicateId}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-700">
+                        <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Object Atom</div>
+                        <div className="text-green-800 dark:text-green-200 font-medium">{result.object}</div>
+                        {result.objectAtomInfo?.description && (
+                          <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                            {result.objectAtomInfo.description}
+                          </div>
+                        )}
+                        {result.objectAtomInfo?.type && (
+                          <div className="text-xs text-green-500 dark:text-green-300 mt-1">
+                            Type: {getAtomTypeDisplay(result.objectAtomInfo.type)}
+                          </div>
+                        )}
+                        {result.objectId && (
+                          <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                            ID: {result.objectId}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
