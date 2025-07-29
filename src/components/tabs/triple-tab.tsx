@@ -227,7 +227,11 @@ export function TripleTab() {
           publicClient,
           address: ethMultiVaultAddress
         },
-        [[BigInt(existingSubjectId)], [BigInt(existingPredicateId)], [BigInt(existingObjectId)]]
+        [
+          [BigInt(existingSubjectId)],
+          [BigInt(existingPredicateId)],
+          [BigInt(existingObjectId)]
+        ]
       )
       
       const newTriple = {
@@ -236,11 +240,18 @@ export function TripleTab() {
         object: `Atom ${existingObjectId}`,
         id: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
         vaultId: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
+        tripleId: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`, // This is actually the vault ID
         createdAt: new Date().toISOString(),
         transactionHash: result.transactionHash,
         subjectId: existingSubjectId,
         predicateId: existingPredicateId,
-        objectId: existingObjectId
+        objectId: existingObjectId,
+        // Show both IDs clearly
+        displayInfo: {
+          tripleId: `Triple ID: ${result.state[0]?.vaultId?.toString() || 'Unknown'}`,
+          vaultId: `Vault ID: ${result.state[0]?.vaultId?.toString() || 'Unknown'} (Use this for vault lookup)`,
+          note: 'Note: For vault lookup, use the Vault ID above'
+        }
       }
       
       setResults(prev => [newTriple, ...prev])
@@ -419,55 +430,19 @@ export function TripleTab() {
       const predicateIdBigInt = typeof predicateId === 'string' ? BigInt(predicateId) : BigInt(predicateId.toString())
       const objectIdBigInt = typeof objectId === 'string' ? BigInt(objectId) : BigInt(objectId.toString())
       
-      let result
-      let lastError = null
-      
-      try {
-        result = await batchCreateTripleStatements(
-          {
-            walletClient,
-            publicClient,
-            address: ethMultiVaultAddress
-          },
+      // SDK: Create triple from three atoms using batch operation
+      const result = await batchCreateTripleStatements(
+        {
+          walletClient,
+          publicClient,
+          address: ethMultiVaultAddress
+        },
+        [
           [subjectIdBigInt],
           [predicateIdBigInt],
           [objectIdBigInt]
-        )
-      } catch (error) {
-        lastError = error
-        
-        try {
-          result = await batchCreateTripleStatements(
-            {
-              walletClient,
-              publicClient,
-              address: ethMultiVaultAddress
-            },
-            [subjectId],
-            [predicateId],
-            [objectId]
-          )
-        } catch (stringError) {
-          lastError = stringError
-          
-          try {
-            result = await batchCreateTripleStatements(
-              {
-                walletClient,
-                publicClient,
-                address: ethMultiVaultAddress
-              },
-              [Number(subjectId)],
-              [Number(predicateId)],
-              [Number(objectId)]
-            )
-          } catch (numberError) {
-            lastError = numberError
-            
-            throw new Error(`Triple creation failed. Your atoms were created successfully with IDs: Subject=${subjectId}, Predicate=${predicateId}, Object=${objectId}. You can use these IDs to create triples manually later. Last error: ${lastError?.message || 'Unknown error'}`)
-          }
-        }
-      }
+        ]
+      )
       
       const newTriple = {
         subject: createSubject,
@@ -475,11 +450,18 @@ export function TripleTab() {
         object: createObject,
         id: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`,
         vaultId: result.state[0]?.vaultId?.toString(),
+        tripleId: result.state[0]?.vaultId?.toString() || `triple-${Date.now()}`, // This is actually the vault ID
         createdAt: new Date().toISOString(),
         transactionHash: result.transactionHash,
         subjectId: subjectId.toString(),
         predicateId: predicateId.toString(),
-        objectId: objectId.toString()
+        objectId: objectId.toString(),
+        // Show both IDs clearly
+        displayInfo: {
+          tripleId: `Triple ID: ${result.state[0]?.vaultId?.toString() || 'Unknown'}`,
+          vaultId: `Vault ID: ${result.state[0]?.vaultId?.toString() || 'Unknown'} (Use this for vault lookup)`,
+          note: 'Note: For vault lookup, use the Vault ID above'
+        }
       }
       
       setResults(prev => [newTriple, ...prev])
@@ -498,10 +480,13 @@ export function TripleTab() {
         userFriendlyError = 'Insufficient balance for transaction. Please ensure you have enough tokens for gas fees.'
       } else if (errorMessage.includes('length')) {
         userFriendlyError = 'Triple creation failed due to data format issue. Your atoms were created successfully.'
+      } else if (errorMessage.includes('EthMultiVault_TripleExists')) {
+        userFriendlyError = 'This triple already exists! The combination of these atoms has already been used to create a triple.'
       }
       
       setError(`Failed to create triple: ${userFriendlyError}`)
       
+      // Always show the created atoms even if triple creation failed
       if (subjectId && predicateId && objectId) {
         setAtomCreationStatus(prev => ({
           subject: { ...prev.subject, status: 'success', id: subjectId.toString() },
@@ -509,7 +494,6 @@ export function TripleTab() {
           object: { ...prev.object, status: 'success', id: objectId.toString() }
         }))
         
-        const atomIdsMessage = `Your atoms were created successfully with IDs: Subject=${subjectId}, Predicate=${predicateId}, Object=${objectId}. You can use these IDs to create triples manually later.`
       }
     } finally {
       setIsCreating(false)
@@ -521,11 +505,20 @@ export function TripleTab() {
     
     setIsLoading(true)
     setError(null)
+    setResults([])
     
     try {
-      const atom = await getAtom(vaultLookupId)
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Vault lookup timeout - request took too long')), 15000)
+      )
+      
+      // Try to get atom first
+      const atomPromise = getAtom(vaultLookupId).catch(() => null)
+      const atom = await Promise.race([atomPromise, timeoutPromise])
       
       if (atom) {
+        // Handle atom vault lookup
         const cleanAtomData = (data: any) => {
           if (!data) return 'No description available'
           
@@ -579,13 +572,166 @@ export function TripleTab() {
         }
         
         setResults([transformedAtom])
+        return
+      }
+      
+      // If not found as atom, try as triple
+      const triplePromise = getTriple(vaultLookupId).catch(() => null)
+      const triple = await Promise.race([triplePromise, timeoutPromise])
+      
+      if (triple) {
+        // Handle triple vault lookup
+        const cleanTripleData = (data: any) => {
+          if (!data) return 'No description available'
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return 'IPFS Content Available'
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.name) return parsed.name
+                if (parsed.description) return parsed.description
+                return 'Structured Content Available'
+              } catch {
+                return 'Content Available'
+              }
+            }
+            return data
+          }
+          
+          return 'Content Available'
+        }
+
+        const parseTripleContent = (data: any) => {
+          if (!data) return { content: 'No content available', type: 'empty' }
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return { content: data, type: 'ipfs-hash' }
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                return { 
+                  content: parsed, 
+                  type: 'json',
+                  name: parsed.name,
+                  description: parsed.description,
+                  type: parsed.type,
+                  createdAt: parsed.createdAt,
+                  hasImage: parsed.hasImage,
+                  imageUrl: parsed.imageUrl
+                }
+              } catch {
+                return { content: data, type: 'text' }
+              }
+            }
+            return { content: data, type: 'text' }
+          }
+          
+          return { content: data, type: 'object' }
+        }
+
+        const tripleContent = parseTripleContent(triple.data || triple.label)
+        
+        const transformedTriple = {
+          name: tripleContent.name || cleanTripleData(triple.label) || cleanTripleData(triple.data) || 'Unnamed Triple',
+          description: tripleContent.description || cleanTripleData(triple.data) || cleanTripleData(triple.label) || 'No description available',
+          id: triple.term_id?.toString() || vaultLookupId,
+          creator: triple.creator?.label || 'Unknown',
+          createdAt: triple.created_at,
+          type: getTripleTypeDisplay(triple.type),
+          emoji: triple.emoji,
+          image: triple.image,
+          transactionHash: triple.transaction_hash,
+          blockNumber: triple.block_number,
+          tripleContent: tripleContent,
+          hasImage: tripleContent.hasImage,
+          imageUrl: tripleContent.imageUrl,
+          // Triple-specific fields
+          subjectId: triple.subject_id?.toString(),
+          predicateId: triple.predicate_id?.toString(),
+          objectId: triple.object_id?.toString(),
+          subjectAtomInfo: triple.subject_atom,
+          predicateAtomInfo: triple.predicate_atom,
+          objectAtomInfo: triple.object_atom
+        }
+        
+        setResults([transformedTriple])
+        return
+      }
+
+      // If not found as triple, try to get it as a vault ID directly
+      // This handles the case where the vault ID from triple creation is used
+      try {
+        const vaultAtom = await getAtom(vaultLookupId)
+        if (vaultAtom && vaultAtom.term?.vaults) {
+          const transformedVault = {
+            name: `Vault ${vaultLookupId}`,
+            description: `Direct vault lookup`,
+            id: vaultLookupId,
+            vaultId: vaultLookupId,
+            creator: vaultAtom.creator?.label || 'Unknown',
+            createdAt: vaultAtom.created_at,
+            type: 'Direct Vault',
+            transactionHash: vaultAtom.transaction_hash,
+            blockNumber: vaultAtom.block_number,
+            vaultInfo: {
+              positionCount: vaultAtom.term.vaults.position_count,
+              totalShares: vaultAtom.term.vaults.total_shares,
+              currentSharePrice: vaultAtom.term.vaults.current_share_price,
+              positionsCount: vaultAtom.term.vaults.positions_aggregate?.aggregate?.count || 0,
+              vaultAddress: vaultAtom.term.vaults.address,
+              vaultId: vaultAtom.term.vaults.id,
+              totalValue: vaultAtom.term.vaults.total_value,
+              shareSupply: vaultAtom.term.vaults.share_supply,
+              marketCap: vaultAtom.term.vaults.market_cap,
+              lastUpdated: vaultAtom.term.vaults.last_updated,
+              positions: vaultAtom.term.vaults.positions,
+              tradingVolume: vaultAtom.term.vaults.trading_volume,
+              priceHistory: vaultAtom.term.vaults.price_history
+            }
+          }
+          
+          setResults([transformedVault])
+          return
+        }
+      } catch (vaultErr) {
+        // Ignore vault lookup errors
+      }
+      
+      // Check if we're on a testnet and provide specific guidance
+      const networkConfig = getIntuitionConfig(chainId)
+      const isTestnet = networkConfig?.testnet || false
+      
+      if (isTestnet) {
+        setError(`Vault ${vaultLookupId} not found on ${networkConfig?.name}. This could be due to:
+        
+1. **Slow indexing** - Testnet indexing can take 5-15 minutes
+2. **Network issues** - Try switching networks or refreshing  
+3. **Wrong network** - Make sure you're on the same network where you created the triple
+4. **Wrong ID type** - For triples, use the vault ID (not the triple ID) for vault lookup
+
+Try searching again in a few minutes, or check the transaction hash to confirm the triple was created.`)
       } else {
         setError(`Vault ${vaultLookupId} not found. Note: Vaults are created automatically when atoms or triples are created.`)
-        setResults([])
       }
+      
     } catch (err) {
-      setError(`Failed to lookup vault: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      setResults([])
+      let errorMessage = 'Unknown error'
+      if (err instanceof Error) {
+        if (err.message.includes('timeout')) {
+          errorMessage = 'Vault lookup timed out. The request took too long. Please try again.'
+        } else if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(`Failed to lookup vault: ${errorMessage}`)
     } finally {
       setIsLoading(false)
     }
@@ -601,7 +747,7 @@ export function TripleTab() {
           
           {!isConnected ? (
           <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-yellow-700 text-sm">⚠️ Please connect your wallet to create triples</p>
+            <p className="text-yellow-700 text-sm">Please connect your wallet to create triples</p>
           </div>
         ) : !isSupportedNetwork(chainId) ? (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -609,7 +755,7 @@ export function TripleTab() {
           </div>
         ) : (
           <div className="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
-            <p className="text-green-700 dark:text-green-300 text-sm">✅ Connected to {getIntuitionConfig(chainId)?.name} - Ready to create triples!</p>
+            <p className="text-green-700 dark:text-green-300 text-sm">Connected to {getIntuitionConfig(chainId)?.name} - Ready to create triples!</p>
           </div>
         )}
         
@@ -649,6 +795,13 @@ export function TripleTab() {
             {isLoading ? 'Searching...' : 'Search'}
           </button>
         </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <span>
+            Search for triples by their ID. 
+            <br />
+            <span className="text-blue-600 dark:text-blue-400 font-medium">Note: You can only search for atoms and triples on mainnet networks.</span>
+          </span>
+        </p>
       </div>
 
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
@@ -656,7 +809,7 @@ export function TripleTab() {
         
    
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
-          <h4 className="text-sm font-semibold text-blue-800 dark:text-white mb-2">📝 How to Create Triples</h4>
+          <h4 className="text-sm font-semibold text-blue-800 dark:text-white mb-2">How to Create Triples</h4>
           <p className="text-sm text-blue-700 dark:text-white leading-relaxed">
             Triples represent relationships between concepts in the form of <strong>Subject → Predicate → Object</strong>.
             You can either create new atoms or use existing ones:
@@ -669,8 +822,8 @@ export function TripleTab() {
             <strong>Example:</strong> "Alice" → "owns" → "car" creates the relationship "Alice owns car"
           </div>
           <div className="mt-3 space-y-1 text-xs text-blue-600 dark:text-white">
-            <div><strong>💡 Tip:</strong> Use existing atoms to save gas fees and avoid creating duplicate atoms</div>
-            <div><strong>⚠️ Note:</strong> If creation fails, your atoms are still created and can be used later</div>
+            <div><strong>Tip:</strong> Use existing atoms to save gas fees and avoid creating duplicate atoms</div>
+            <div><strong>Note:</strong> If creation fails, your atoms are still created and can be used later</div>
           </div>
         </div>
         
@@ -698,7 +851,7 @@ export function TripleTab() {
         {!useExistingAtoms && (isCreating || Object.keys(atomCreationStatus).length > 0) && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-4">
             <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-3">
-              {isCreating ? '🔄 Creating Atoms...' : '✅ Atoms Created Successfully'}
+              {isCreating ? 'Creating Atoms...' : 'Atoms Created Successfully'}
             </h4>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -708,7 +861,7 @@ export function TripleTab() {
                     <span className="text-yellow-600 dark:text-yellow-400">⏳ Creating...</span>
                   )}
                   {atomCreationStatus.subject?.status === 'success' && (
-                    <span className="text-green-600 dark:text-green-400">✅ Created (ID: {atomCreationStatus.subject.id})</span>
+                    <span className="text-green-600 dark:text-green-400">Created (ID: {atomCreationStatus.subject.id})</span>
                   )}
                   {atomCreationStatus.subject?.status === 'error' && (
                     <span className="text-red-600 dark:text-red-400">❌ Failed</span>
@@ -722,7 +875,7 @@ export function TripleTab() {
                     <span className="text-yellow-600 dark:text-yellow-400">⏳ Creating...</span>
                   )}
                   {atomCreationStatus.predicate?.status === 'success' && (
-                    <span className="text-green-600 dark:text-green-400">✅ Created (ID: {atomCreationStatus.predicate.id})</span>
+                    <span className="text-green-600 dark:text-green-400">Created (ID: {atomCreationStatus.predicate.id})</span>
                   )}
                   {atomCreationStatus.predicate?.status === 'error' && (
                     <span className="text-red-600 dark:text-red-400">❌ Failed</span>
@@ -736,7 +889,7 @@ export function TripleTab() {
                     <span className="text-yellow-600 dark:text-yellow-400">⏳ Creating...</span>
                   )}
                   {atomCreationStatus.object?.status === 'success' && (
-                    <span className="text-green-600 dark:text-green-400">✅ Created (ID: {atomCreationStatus.object.id})</span>
+                    <span className="text-green-600 dark:text-green-400">Created (ID: {atomCreationStatus.object.id})</span>
                   )}
                   {atomCreationStatus.object?.status === 'error' && (
                     <span className="text-red-600 dark:text-red-400">❌ Failed</span>
@@ -745,7 +898,7 @@ export function TripleTab() {
               </div>
               {!isCreating && Object.keys(atomCreationStatus).length > 0 && (
                 <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-800 rounded text-xs text-blue-700 dark:text-blue-300">
-                  <strong>💡 Note:</strong> These atoms were created successfully and can be used to create triples manually later, even if the automatic triple creation failed.
+                  <strong>Note:</strong> These atoms were created successfully and can be used to create triples manually later, even if the automatic triple creation failed.
                 </div>
               )}
             </div>
@@ -756,7 +909,7 @@ export function TripleTab() {
         {useExistingAtoms && isCreating && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
             <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3">
-              🔄 Creating Triple from Existing Atoms...
+              Creating Triple from Existing Atoms...
             </h4>
             <div className="text-sm text-blue-700 dark:text-blue-300">
               Using existing atoms with IDs: {existingSubjectId}, {existingPredicateId}, {existingObjectId}
@@ -768,7 +921,7 @@ export function TripleTab() {
           {useExistingAtoms ? (
             <div>
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 mb-4">
-                <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">💰 Using Existing Atoms</h4>
+                <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Using Existing Atoms</h4>
                 <p className="text-sm text-green-700 dark:text-green-300">
                   Enter the atom IDs you want to use for the triple. This saves gas fees by reusing existing atoms.
                 </p>
@@ -908,6 +1061,30 @@ export function TripleTab() {
                         <code className="bg-white dark:bg-gray-700 px-3 py-2 rounded border text-sm font-mono text-purple-600 dark:text-purple-400 block">
                           {result.id}
                         </code>
+                      </div>
+                    )}
+
+                    {/* Display Info for New Triples */}
+                    {result.displayInfo && (
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                        <span className="text-sm font-semibold text-green-700 dark:text-green-300 block mb-2">📋 Important IDs</span>
+                        <div className="space-y-2">
+                          <div className="bg-white dark:bg-gray-700 px-3 py-2 rounded border">
+                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 block">Triple ID:</span>
+                            <code className="text-sm font-mono text-purple-600 dark:text-purple-400">
+                              {result.displayInfo.tripleId}
+                            </code>
+                          </div>
+                          <div className="bg-white dark:bg-gray-700 px-3 py-2 rounded border">
+                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 block">Vault ID (Use for vault lookup):</span>
+                            <code className="text-sm font-mono text-green-600 dark:text-green-400">
+                              {result.displayInfo.vaultId}
+                            </code>
+                          </div>
+                          <div className="text-xs text-green-600 dark:text-green-400 italic">
+                            💡 {result.displayInfo.note}
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -1149,7 +1326,11 @@ export function TripleTab() {
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search Vaults</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Enter an atom/triple ID to lookup vault information in the Intuition network.
+          <span>
+            Look up vault information by vault ID. 
+            <br />
+            <span className="text-blue-600 dark:text-blue-400 font-medium">Note: You can only search for atoms and triples on mainnet networks.</span>
+          </span>
         </p>
         <div className="flex gap-4">
           <input

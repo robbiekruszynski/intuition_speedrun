@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Intuition SpeedRun",
+  title: "Intuition Speed Run",
   description: "Speed run through the Intuition SDK - Create atoms, triples, and explore use cases",
 };
 
