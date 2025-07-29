@@ -402,14 +402,11 @@ export function BatchOperationsTab() {
               <div className="text-xs text-purple-600 dark:text-purple-400 mb-2">
                 SDK: <code>batchCreateAtomsFromEthereumAccounts</code> - Creates atoms representing Ethereum accounts in a single transaction.
               </div>
-              <div className="text-xs text-purple-500 dark:text-purple-400 mb-3 p-2 bg-purple-100 dark:bg-purple-800 rounded">
-                <strong>Note:</strong> If any address already has an atom, the entire batch will fail. The error message will show the existing atom ID so you can search for it. Consider creating atoms individually or using different addresses.
-              </div>
               <textarea
                 placeholder="Enter Ethereum addresses (comma-separated): 0x123..., 0x456..."
                 value={ethereumAddresses}
                 onChange={(e) => setEthereumAddresses(e.target.value)}
-                rows={2}
+                rows={3}
                 className="w-full px-3 py-2 border border-purple-200 dark:border-purple-600 rounded text-sm text-purple-900 dark:text-purple-100 bg-white dark:bg-gray-700"
               />
               <button
@@ -433,7 +430,7 @@ export function BatchOperationsTab() {
                 placeholder="Enter smart contract addresses (comma-separated): 0x123..., 0x456..."
                 value={smartContractAddresses}
                 onChange={(e) => setSmartContractAddresses(e.target.value)}
-                rows={2}
+                rows={3}
                 className="w-full px-3 py-2 border border-purple-200 dark:border-purple-600 rounded text-sm text-purple-900 dark:text-purple-100 bg-white dark:bg-gray-700"
               />
               <button
