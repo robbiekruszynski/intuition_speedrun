@@ -86,7 +86,25 @@ export function BatchOperationsTab() {
       setTransactionHash(result.transactionHash)
       setEthereumAddresses('')
     } catch (err) {
-      setError(`Failed to batch create atoms from Ethereum accounts: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      // Handle specific atom exists error for batch operations
+      if (errorMessage.includes('EthMultiVault_AtomExists')) {
+        const match = errorMessage.match(/\(([^,]+),\s*(\d+)\)/)
+        if (match) {
+          const atomUri = match[1]
+          const atomId = match[2]
+          setError(`Batch operation failed: One or more Ethereum addresses already have atoms. The first conflicting address has atom ID ${atomId}. You can search for atom ID ${atomId} in the Atoms tab to view the existing atom. Try creating atoms individually or use different addresses.`)
+        } else {
+          setError(`Batch operation failed: One or more Ethereum addresses already have atoms. Try creating atoms individually or use different addresses.`)
+        }
+      } else if (errorMessage.includes('Invalid address')) {
+        setError('Invalid Ethereum address format in batch. Please ensure all addresses are valid 0x-prefixed addresses.')
+      } else if (errorMessage.includes('insufficient funds')) {
+        setError('Insufficient funds for batch transaction. Please ensure you have enough ETH for gas fees.')
+      } else {
+        setError(`Failed to batch create atoms from Ethereum accounts: ${errorMessage}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -144,7 +162,15 @@ export function BatchOperationsTab() {
       setTransactionHash(result.transactionHash)
       setSmartContractAddresses('')
     } catch (err) {
-      setError(`Failed to batch create atoms from smart contracts: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      if (errorMessage.includes('Invalid address')) {
+        setError('Invalid smart contract address format in batch. Please ensure all addresses are valid 0x-prefixed addresses.')
+      } else if (errorMessage.includes('insufficient funds')) {
+        setError('Insufficient funds for batch transaction. Please ensure you have enough ETH for gas fees.')
+      } else {
+        setError(`Failed to batch create atoms from smart contracts: ${errorMessage}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -209,7 +235,15 @@ export function BatchOperationsTab() {
       setTransactionHash(result.transactionHash)
       setThingsData('')
     } catch (err) {
-      setError(`Failed to batch create atoms from things: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      if (errorMessage.includes('Invalid JSON')) {
+        setError('Invalid JSON format in things data. Please ensure the JSON array is properly formatted.')
+      } else if (errorMessage.includes('insufficient funds')) {
+        setError('Insufficient funds for batch transaction. Please ensure you have enough ETH for gas fees.')
+      } else {
+        setError(`Failed to batch create atoms from things: ${errorMessage}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -267,7 +301,15 @@ export function BatchOperationsTab() {
       setTransactionHash(result.transactionHash)
       setIpfsUris('')
     } catch (err) {
-      setError(`Failed to batch create atoms from IPFS URIs: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      if (errorMessage.includes('Invalid URI')) {
+        setError('Invalid IPFS URI format in batch. Please ensure all URIs are valid IPFS URIs (ipfs://...).')
+      } else if (errorMessage.includes('insufficient funds')) {
+        setError('Insufficient funds for batch transaction. Please ensure you have enough ETH for gas fees.')
+      } else {
+        setError(`Failed to batch create atoms from IPFS URIs: ${errorMessage}`)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -359,6 +401,9 @@ export function BatchOperationsTab() {
               </label>
               <div className="text-xs text-purple-600 dark:text-purple-400 mb-2">
                 SDK: <code>batchCreateAtomsFromEthereumAccounts</code> - Creates atoms representing Ethereum accounts in a single transaction.
+              </div>
+              <div className="text-xs text-purple-500 dark:text-purple-400 mb-3 p-2 bg-purple-100 dark:bg-purple-800 rounded">
+                <strong>Note:</strong> If any address already has an atom, the entire batch will fail. The error message will show the existing atom ID so you can search for it. Consider creating atoms individually or using different addresses.
               </div>
               <textarea
                 placeholder="Enter Ethereum addresses (comma-separated): 0x123..., 0x456..."

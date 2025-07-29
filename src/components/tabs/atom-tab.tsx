@@ -1150,7 +1150,7 @@ export function AtomTab() {
                           if (match) {
                             const atomUri = match[1]
                             const atomId = match[2]
-                            setError(`Atom already exists! This Ethereum address (${createName}) already has an atom with ID ${atomId}. Try searching for atom ID ${atomId} to view the existing atom.`)
+                            setError(`Atom already exists! This Ethereum address (${createName}) already has an atom with ID ${atomId}. You can search for atom ID ${atomId} in the Search Atoms section to view the existing atom.`)
                           } else {
                             setError(`Atom already exists! This Ethereum address (${createName}) already has an atom. Try searching for the existing atom.`)
                           }
