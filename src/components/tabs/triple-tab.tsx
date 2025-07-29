@@ -2,53 +2,70 @@
 
 import { useState } from 'react'
 import { useIntuition } from '@/hooks/use-intuition'
-import { useAccount, useChainId } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi'
 import { 
   batchCreateTripleStatements,
-  createTripleStatement,
-  getTriple,
-  getAtom,
-  getEthMultiVaultAddressFromChainId,
   createAtomFromString
 } from '@0xintuition/sdk'
-import { 
-  getIntuitionConfig, 
-  isSupportedNetwork
-} from '@/lib/intuition-config'
-import { 
+import { SUPPORTED_NETWORKS } from '@/lib/intuition-config'
+import {
   searchTripleWithNetwork,
   isTestnetNetwork,
   getNetworkSearchMessage
 } from '@/lib/graphql-config'
-import { usePublicClient, useWalletClient } from 'wagmi'
 
 export function TripleTab() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [createSubject, setCreateSubject] = useState('')
-  const [createPredicate, setCreatePredicate] = useState('')
-  const [createObject, setCreateObject] = useState('')
+  const [subjectName, setSubjectName] = useState('')
+  const [subjectDescription, setSubjectDescription] = useState('')
+  const [predicateName, setPredicateName] = useState('')
+  const [predicateDescription, setPredicateDescription] = useState('')
+  const [objectName, setObjectName] = useState('')
+  const [objectDescription, setObjectDescription] = useState('')
   const [vaultLookupId, setVaultLookupId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
   const [results, setResults] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
-  const [atomCreationStatus, setAtomCreationStatus] = useState<{
-    subject?: { id?: string, status: 'creating' | 'success' | 'error', hash?: string }
-    predicate?: { id?: string, status: 'creating' | 'success' | 'error', hash?: string }
-    object?: { id?: string, status: 'creating' | 'success' | 'error', hash?: string }
-  }>({})
-  
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'not-found'>('idle')
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchResult, setSearchResult] = useState<any | null>(null)
+  const [vaultLookupStatus, setVaultLookupStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'not-found'>('idle')
+  const [vaultLookupError, setVaultLookupError] = useState<string | null>(null)
+  const [vaultLookupResult, setVaultLookupResult] = useState<any | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
   const [useExistingAtoms, setUseExistingAtoms] = useState(false)
   const [existingSubjectId, setExistingSubjectId] = useState('')
   const [existingPredicateId, setExistingPredicateId] = useState('')
   const [existingObjectId, setExistingObjectId] = useState('')
+  const [atomCreationStatus, setAtomCreationStatus] = useState<{
+    subject?: { status: 'creating' | 'success' | 'error'; id?: string; hash?: string };
+    predicate?: { status: 'creating' | 'success' | 'error'; id?: string; hash?: string };
+    object?: { status: 'creating' | 'success' | 'error'; id?: string; hash?: string };
+  }>({})
+  const [createSubject, setCreateSubject] = useState('')
+  const [createPredicate, setCreatePredicate] = useState('')
+  const [createObject, setCreateObject] = useState('')
 
-  const { intuition } = useIntuition()
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
+  
+  const {
+    batchCreateTripleStatements,
+    getAtom,
+    getTriple,
+    getEthMultiVaultAddressFromChainId
+  } = useIntuition()
+
+  const getIntuitionConfig = (chainId: number) => {
+    return SUPPORTED_NETWORKS.find(network => network.chainId === chainId)
+  }
+
+  const isSupportedNetwork = (chainId: number) => {
+    return SUPPORTED_NETWORKS.some(network => network.chainId === chainId)
+  }
 
   const getTripleTypeDisplay = (type: any) => {
     if (!type) return 'Unknown'
@@ -794,7 +811,7 @@ Try searching again in a few minutes, or check the transaction hash to confirm t
             <p className="text-blue-700 text-sm">
               🎉 Triple transaction submitted! Hash: 
               <a 
-                href={`${getIntuitionConfig(chainId)?.blockExplorer}/tx/${transactionHash}`}
+                href={`${getIntuitionConfig(chainId)?.explorer}/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-800 underline ml-1"
@@ -1136,7 +1153,7 @@ Try searching again in a few minutes, or check the transaction hash to confirm t
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
                         <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 block mb-2">Transaction</span>
                         <a 
-                          href={`${getIntuitionConfig(chainId)?.blockExplorer}/tx/${result.transactionHash}`}
+                          href={`${getIntuitionConfig(chainId)?.explorer}/tx/${result.transactionHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-mono text-sm hover:underline flex items-center gap-1"

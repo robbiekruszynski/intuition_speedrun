@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AtomTab } from './tabs/atom-tab'
+import AtomTab from './tabs/atom-tab'
 import { TripleTab } from './tabs/triple-tab'
 import { UseCasesTab } from './tabs/use-cases-tab'
 import { BatchOperationsTab } from './tabs/batch-operations-tab'

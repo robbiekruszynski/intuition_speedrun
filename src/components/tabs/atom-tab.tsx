@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi'
 import { useIntuition } from '@/hooks/use-intuition'
-import { SUPPORTED_NETWORKS } from '@/lib/intuition-config'
+import { SUPPORTED_NETWORKS, PINATA_CONFIG } from '@/lib/intuition-config'
 import { searchAtomWithNetwork, getNetworkSearchMessage, isTestnetNetwork } from '@/lib/graphql-config'
 import { getEthMultiVaultAddressFromChainId } from '@0xintuition/sdk'
 
@@ -20,7 +20,7 @@ export default function AtomTab() {
   const [error, setError] = useState<string | null>(null)
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
   const [activeAtomTab, setActiveAtomTab] = useState<'create' | 'advanced'>('create')
-  
+
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
@@ -428,14 +428,16 @@ export default function AtomTab() {
     
     setIsLoading(true)
     setError(null)
+    setResults([])
     
     try {
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Vault lookup timeout - request took too long')), 30000)
+        setTimeout(() => reject(new Error('Vault lookup timeout - request took too long')), 15000)
       )
       
-      const searchPromise = searchAtomWithNetwork(vaultLookupId, chainId, getAtom)
-      const atom = await Promise.race([searchPromise, timeoutPromise])
+      // Try to get atom first
+      const atomPromise = getAtom(vaultLookupId).catch(() => null)
+      const atom = await Promise.race([atomPromise, timeoutPromise])
       
       if (atom) {
         const cleanAtomData = (data: any) => {
@@ -490,51 +492,199 @@ export default function AtomTab() {
           return { content: data, type: 'object' }
         }
 
-        const atomContent = parseAtomContent((atom as any).data || (atom as any).label)
+        const atomContent = parseAtomContent(atom.data || atom.label)
 
-        const transformedAtom = {
-          name: atomContent.name || cleanAtomData((atom as any).label) || cleanAtomData((atom as any).data) || 'Unnamed Atom',
-          description: atomContent.description || cleanAtomData((atom as any).data) || cleanAtomData((atom as any).label) || 'No description available',
-          id: (atom as any).term_id?.toString() || vaultLookupId,
+        // Debug: Log the atom structure to see what's available
+        console.log('Atom data structure:', JSON.stringify(atom, null, 2))
+
+        // Try different paths to access vault information
+        const vaultInfo = atom.term?.vaults || atom.vaults || atom.vault || atom.term?.vault || null
+
+        const transformedVault = {
+          name: atomContent.name || cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
+          description: atomContent.description || cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
+          id: atom.term_id?.toString() || vaultLookupId,
           vaultId: vaultLookupId,
-          creator: (atom as any).creator?.label || 'Unknown',
-          createdAt: (atom as any).created_at,
-          type: getAtomTypeDisplay((atom as any).type),
-          emoji: (atom as any).emoji,
-          image: (atom as any).image,
-          transactionHash: (atom as any).transaction_hash,
-          blockNumber: (atom as any).block_number,
+          creator: atom.creator?.label || 'Unknown',
+          createdAt: atom.created_at,
+          type: getAtomTypeDisplay(atom.type),
+          emoji: atom.emoji,
+          image: atom.image,
+          transactionHash: atom.transaction_hash,
+          blockNumber: atom.block_number,
           atomContent: atomContent,
           hasImage: atomContent.hasImage,
           imageUrl: atomContent.imageUrl,
-          // Add network context information
-          networkContext: (atom as any)._networkContext
+          // Vault-specific information - try multiple paths
+          vaultInfo: vaultInfo ? {
+            positionCount: vaultInfo.position_count || vaultInfo.positionCount || 0,
+            totalShares: vaultInfo.total_shares || vaultInfo.totalShares || 0,
+            currentSharePrice: vaultInfo.current_share_price || vaultInfo.currentSharePrice || 0,
+            positionsCount: vaultInfo.positions_aggregate?.aggregate?.count || vaultInfo.positionsCount || 0,
+            vaultAddress: vaultInfo.address || vaultInfo.vaultAddress || null,
+            vaultId: vaultInfo.id || vaultInfo.vaultId || vaultLookupId,
+            totalValue: vaultInfo.total_value || vaultInfo.totalValue || 0,
+            shareSupply: vaultInfo.share_supply || vaultInfo.shareSupply || 0,
+            marketCap: vaultInfo.market_cap || vaultInfo.marketCap || 0,
+            lastUpdated: vaultInfo.last_updated || vaultInfo.lastUpdated || null,
+            positions: vaultInfo.positions || [],
+            tradingVolume: vaultInfo.trading_volume || vaultInfo.tradingVolume || 0,
+            priceHistory: vaultInfo.price_history || vaultInfo.priceHistory || []
+          } : null,
+          networkContext: atom._networkContext
         }
         
-        setResults([transformedAtom])
-      } else {
-        const networkConfig = getIntuitionConfig(chainId)
-        const isTestnet = isTestnetNetwork(chainId)
+        // Debug: Log the transformed vault data
+        console.log('Transformed vault data:', JSON.stringify(transformedVault, null, 2))
         
-        if (isTestnet) {
-          setError(`Vault ${vaultLookupId} not found. ${getNetworkSearchMessage(chainId, 'vault')}`)
-        } else {
-          setError(`Vault ${vaultLookupId} not found.`)
+        // If no vault info found, try to create basic vault info from the vault ID
+        if (!transformedVault.vaultInfo) {
+          console.log('No vault info found in atom data, creating basic vault info')
+          transformedVault.vaultInfo = {
+            positionCount: 0,
+            totalShares: 0,
+            currentSharePrice: 0,
+            positionsCount: 0,
+            vaultAddress: null,
+            vaultId: vaultLookupId,
+            totalValue: 0,
+            shareSupply: 0,
+            marketCap: 0,
+            lastUpdated: null,
+            positions: [],
+            tradingVolume: 0,
+            priceHistory: [],
+            // Add a note that this is basic info
+            note: 'Basic vault information - detailed trading data not available'
+          }
         }
-        setResults([])
+        
+        setResults([transformedVault])
+        return
       }
-    } catch (err) {
+      
+      // If not found as atom, try as triple
+      const triplePromise = getTriple(vaultLookupId).catch(() => null)
+      const triple = await Promise.race([triplePromise, timeoutPromise])
+      
+      if (triple) {
+        const cleanTripleData = (data: any) => {
+          if (!data) return 'No description available'
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return 'IPFS Content Available'
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.name) return parsed.name
+                if (parsed.description) return parsed.description
+                return 'Structured Content Available'
+              } catch {
+                return 'Content Available'
+              }
+            }
+            return data
+          }
+          
+          return 'Content Available'
+        }
+
+        const parseTripleContent = (data: any) => {
+          if (!data) return { content: 'No content available', type: 'empty' }
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return { content: data, type: 'ipfs-hash' }
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                return { 
+                  content: parsed, 
+                  type: 'json',
+                  name: parsed.name,
+                  description: parsed.description
+                }
+              } catch {
+                return { content: data, type: 'text' }
+              }
+            }
+            return { content: data, type: 'text' }
+          }
+          
+          return { content: data, type: 'object' }
+        }
+
+        const tripleContent = parseTripleContent(triple.data || triple.label)
+
+        const transformedVault = {
+          name: tripleContent.name || cleanTripleData(triple.label) || cleanTripleData(triple.data) || 'Unnamed Triple',
+          description: tripleContent.description || cleanTripleData(triple.data) || cleanTripleData(triple.label) || 'No description available',
+          id: triple.term_id?.toString() || vaultLookupId,
+          vaultId: vaultLookupId,
+          creator: triple.creator?.label || 'Unknown',
+          createdAt: triple.created_at,
+          type: getTripleTypeDisplay(triple.type),
+          transactionHash: triple.transaction_hash,
+          blockNumber: triple.block_number,
+          tripleContent: tripleContent,
+          // Triple-specific fields
+          subject: triple.subject?.label || 'Unknown',
+          predicate: triple.predicate?.label || 'Unknown',
+          object: triple.object?.label || 'Unknown',
+          subjectId: triple.subject_id?.toString(),
+          predicateId: triple.predicate_id?.toString(),
+          objectId: triple.object_id?.toString(),
+          // Vault-specific information
+          vaultInfo: triple.term?.vaults ? {
+            positionCount: triple.term.vaults.position_count,
+            totalShares: triple.term.vaults.total_shares,
+            currentSharePrice: triple.term.vaults.current_share_price,
+            positionsCount: triple.term.vaults.positions_aggregate?.aggregate?.count || 0,
+            vaultAddress: triple.term.vaults.address,
+            vaultId: triple.term.vaults.id,
+            totalValue: triple.term.vaults.total_value,
+            shareSupply: triple.term.vaults.share_supply,
+            marketCap: triple.term.vaults.market_cap,
+            lastUpdated: triple.term.vaults.last_updated,
+            positions: triple.term.vaults.positions,
+            tradingVolume: triple.term.vaults.trading_volume,
+            priceHistory: triple.term.vaults.price_history
+          } : null,
+          networkContext: triple._networkContext
+        }
+        
+        setResults([transformedVault])
+        return
+      }
+      
+      // If not found as triple, try to get it as a vault ID directly
+      // This handles the case where the vault ID from triple creation is used
       const networkConfig = getIntuitionConfig(chainId)
       const isTestnet = isTestnetNetwork(chainId)
       
-      let errorMessage = `Failed to lookup vault: ${err instanceof Error ? err.message : 'Unknown error'}`
-      
       if (isTestnet) {
-        errorMessage += `\n\n${getNetworkSearchMessage(chainId, 'vault')}`
+        setError(`Vault ${vaultLookupId} not found. ${getNetworkSearchMessage(chainId, 'vault')}`)
+      } else {
+        setError(`Vault ${vaultLookupId} not found. Note: Vaults are created automatically when atoms or triples are created.`)
+      }
+      setResults([])
+      
+    } catch (err) {
+      let errorMessage = 'Unknown error'
+      if (err instanceof Error) {
+        if (err.message.includes('timeout')) {
+          errorMessage = 'Vault lookup timed out. The request took too long. Please try again.'
+        } else if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else {
+          errorMessage = err.message
+        }
       }
       
-      setError(errorMessage)
-      setResults([])
+      setError(`Failed to lookup vault: ${errorMessage}`)
     } finally {
       setIsLoading(false)
     }
@@ -809,12 +959,12 @@ export default function AtomTab() {
                         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
                           <span className="text-sm font-semibold text-blue-700 dark:text-blue-300 block mb-2">Transaction</span>
                           <a 
-                            href={`${getIntuitionConfig(chainId)?.blockExplorer}/tx/${result.transactionHash}`}
+                            href={`${getIntuitionConfig(chainId)?.explorer}/tx/${result.transactionHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-mono text-sm hover:underline flex items-center gap-1"
                           >
-                            {result.transactionHash.slice(0, 8)}...{result.transactionHash.slice(-6)}
+                            {result.transactionHash.slice(0, 10)}...{result.transactionHash.slice(-8)}
                             <span className="text-xs">🔗</span>
                           </a>
                         </div>
@@ -879,105 +1029,165 @@ export default function AtomTab() {
                     {/* Atom Content Details */}
                     {result.atomContent && result.atomContent.type !== 'empty' && (
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                        <h6 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3">Atom Content Details</h6>
-                        {result.atomContent.type === 'json' && (
+                        <h6 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">Content Details</h6>
                           <div className="space-y-2">
-                            <div className="bg-white dark:bg-gray-700 p-3 rounded border">
-                              <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">Structured Data</div>
-                              <div className="space-y-1 text-xs">
-                                {result.atomContent.content.name && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Name:</span>
-                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.name}</span>
-                                  </div>
-                                )}
-                                {result.atomContent.content.description && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Description:</span>
-                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.description}</span>
-                                  </div>
-                                )}
-                                {result.atomContent.content.type && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Type:</span>
-                                    <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.type}</span>
-                                  </div>
-                                )}
-                                {result.atomContent.content.hasImage && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Has Image:</span>
-                                    <span className="text-green-600 dark:text-green-400">✅ Yes</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-blue-600 dark:text-blue-400">Content Type</span>
+                            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">{result.atomContent.type}</span>
                           </div>
-                        )}
-                        {result.atomContent.type === 'ipfs-hash' && (
-                          <div className="bg-white dark:bg-gray-700 p-3 rounded border">
-                            <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">IPFS Content</div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">This atom contains IPFS content with hash:</div>
-                            <code className="bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-xs font-mono text-blue-600 dark:text-blue-400 block break-all">
-                              {result.atomContent.content}
-                            </code>
-                          </div>
-                        )}
-                        {result.atomContent.type === 'text' && (
-                          <div className="bg-white dark:bg-gray-700 p-3 rounded border">
-                            <div className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">Text Content</div>
-                            <div className="text-sm text-gray-700 dark:text-gray-300">
-                              {result.atomContent.content}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          {result.atomContent.content && (
+                            <div className="bg-white dark:bg-gray-700 p-3 rounded border border-blue-200 dark:border-blue-600">
+                              <pre className="text-xs text-blue-700 dark:text-blue-300 overflow-x-auto">
+                                {typeof result.atomContent.content === 'string' 
+                                  ? result.atomContent.content 
+                                  : JSON.stringify(result.atomContent.content, null, 2)
+                                }
+                              </pre>
+                                  </div>
+                                )}
+                        </div>
+                                  </div>
+                                )}
 
                     {/* Vault Information */}
                     {result.vaultInfo && (
-                      <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                        <h6 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-3">Vault Information</h6>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                          <div>
-                            <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Positions</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.positionsCount || result.vaultInfo.positionCount || 0}</span>
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                        <h6 className="text-sm font-semibold text-green-700 dark:text-green-300 mb-3">Vault Information</h6>
+                        
+                        {/* Show note if this is basic vault info */}
+                        {result.vaultInfo.note && (
+                          <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 rounded">
+                            <p className="text-xs text-yellow-700 dark:text-yellow-300">{result.vaultInfo.note}</p>
                           </div>
-                          <div>
-                            <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Shares</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.totalShares?.toString() || 'N/A'}</span>
+                        )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Trading Data */}
+                          <div className="space-y-2">
+                            <h6 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide">Trading Data</h6>
+                            {result.vaultInfo.currentSharePrice && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Share Price</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {typeof result.vaultInfo.currentSharePrice === 'string' 
+                                    ? result.vaultInfo.currentSharePrice 
+                                    : `${result.vaultInfo.currentSharePrice} ETH`
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.totalShares && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Total Shares</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {result.vaultInfo.totalShares}
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.shareSupply && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Share Supply</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {result.vaultInfo.shareSupply}
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.marketCap && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Market Cap</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {typeof result.vaultInfo.marketCap === 'string' 
+                                    ? result.vaultInfo.marketCap 
+                                    : `${result.vaultInfo.marketCap} ETH`
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.tradingVolume && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Trading Volume</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {typeof result.vaultInfo.tradingVolume === 'string' 
+                                    ? result.vaultInfo.tradingVolume 
+                                    : `${result.vaultInfo.tradingVolume} ETH`
+                                  }
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Share Price</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.currentSharePrice?.toString() || 'N/A'}</span>
+
+                          {/* Position Data */}
+                          <div className="space-y-2">
+                            <h6 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide">Positions</h6>
+                            {result.vaultInfo.positionCount && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Position Count</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {result.vaultInfo.positionCount}
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.positionsCount && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Active Positions</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {result.vaultInfo.positionsCount}
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.totalValue && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Total Value</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {typeof result.vaultInfo.totalValue === 'string' 
+                                    ? result.vaultInfo.totalValue 
+                                    : `${result.vaultInfo.totalValue} ETH`
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            {result.vaultInfo.lastUpdated && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-green-600 dark:text-green-400">Last Updated</span>
+                                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                                  {new Date(result.vaultInfo.lastUpdated).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Vault ID</span>
-                            <span className="text-orange-800 dark:text-orange-200 font-mono text-xs">{result.vaultId}</span>
                           </div>
-                          {result.vaultInfo.totalValue && (
-                            <div>
-                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Total Value</span>
-                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.totalValue.toString()}</span>
+
+                        {/* Vault Address */}
+                        {result.vaultInfo.vaultAddress && (
+                          <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-600">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-green-600 dark:text-green-400">Vault Address</span>
+                              <code className="text-xs font-mono text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-800 px-2 py-1 rounded">
+                                {result.vaultInfo.vaultAddress}
+                              </code>
+                            </div>
                             </div>
                           )}
-                          {result.vaultInfo.shareSupply && (
-                            <div>
-                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Share Supply</span>
-                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.shareSupply.toString()}</span>
                             </div>
                           )}
-                          {result.vaultInfo.marketCap && (
-                            <div>
-                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Market Cap</span>
-                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.marketCap.toString()}</span>
+
+                    {/* Triple Information (for triple vaults) */}
+                    {result.subject && result.predicate && result.object && (
+                      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                        <h6 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">Triple Information</h6>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-purple-600 dark:text-purple-400">Subject</span>
+                            <span className="text-sm font-medium text-purple-800 dark:text-purple-200">{result.subject}</span>
                             </div>
-                          )}
-                          {result.vaultInfo.tradingVolume && (
-                            <div>
-                              <span className="text-orange-600 dark:text-orange-400 block text-xs font-medium">Trading Volume</span>
-                              <span className="text-orange-800 dark:text-orange-200 font-semibold">{result.vaultInfo.tradingVolume.toString()}</span>
-                            </div>
-                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-purple-600 dark:text-purple-400">Predicate</span>
+                            <span className="text-sm font-medium text-purple-800 dark:text-purple-200">{result.predicate}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-purple-600 dark:text-purple-400">Object</span>
+                            <span className="text-sm font-medium text-purple-800 dark:text-purple-200">{result.object}</span>
+                          </div>
                         </div>
                       </div>
                     )}

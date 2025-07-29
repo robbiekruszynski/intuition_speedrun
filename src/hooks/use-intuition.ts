@@ -13,10 +13,7 @@ import {
   batchCreateTripleStatements,
   getAtom,
   getTriple,
-  getEthMultiVaultAddressFromChainId,
-  getAtomCreationFees,
-  getTripleCreationFees,
-  getPinataApiToken
+  getEthMultiVaultAddressFromChainId
 } from '@0xintuition/sdk'
 
 export function useIntuition() {
@@ -33,9 +30,6 @@ export function useIntuition() {
     batchCreateTripleStatements,
     getAtom,
     getTriple,
-    getEthMultiVaultAddressFromChainId,
-    getAtomCreationFees,
-    getTripleCreationFees,
-    getPinataApiToken
+    getEthMultiVaultAddressFromChainId
   }
 } 

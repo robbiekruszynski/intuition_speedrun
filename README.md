@@ -1,6 +1,6 @@
 # Intuition SDK Showcase
 
-A comprehensive demonstration of the Intuition SDK capabilities for creating atoms, triples, and exploring real-world use cases. This project showcases all major SDK functions with a modern, user-friendly interface.
+A comprehensive demonstration of our SDK capabilities for creating atoms, triples, and exploring real-world use cases. This project showcases all major SDK functions with a modern, user-friendly interface.
 
 ## Features
 
