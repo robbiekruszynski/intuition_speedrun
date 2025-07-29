@@ -4,16 +4,9 @@ import { useState } from 'react'
 import { useIntuition } from '@/hooks/use-intuition'
 import { useAccount, useChainId } from 'wagmi'
 import { 
-  batchCreateAtomsFromEthereumAccounts,
-  batchCreateAtomsFromSmartContracts,
-  batchCreateAtomsFromThings,
-  batchCreateAtomsFromIpfsUris,
   getEthMultiVaultAddressFromChainId
 } from '@0xintuition/sdk'
-import { 
-  getIntuitionConfig, 
-  isSupportedNetwork
-} from '@/lib/intuition-config'
+import { SUPPORTED_NETWORKS } from '@/lib/intuition-config'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 export function BatchOperationsTab() {
@@ -22,17 +15,29 @@ export function BatchOperationsTab() {
   const [results, setResults] = useState<any[]>([])
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
 
-  // Batch inputs
   const [ethereumAddresses, setEthereumAddresses] = useState('')
   const [smartContractAddresses, setSmartContractAddresses] = useState('')
   const [thingsData, setThingsData] = useState('')
   const [ipfsUris, setIpfsUris] = useState('')
 
-  const { intuition } = useIntuition()
+  const {
+    batchCreateAtomsFromEthereumAccounts,
+    batchCreateAtomsFromSmartContracts,
+    batchCreateAtomsFromThings,
+    batchCreateAtomsFromIpfsUris
+  } = useIntuition()
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
+
+  const getIntuitionConfig = (chainId: number) => {
+    return SUPPORTED_NETWORKS.find(network => network.chainId === chainId)
+  }
+
+  const isSupportedNetwork = (chainId: number) => {
+    return SUPPORTED_NETWORKS.some(network => network.chainId === chainId)
+  }
 
   const handleBatchCreateFromEthereumAccounts = async () => {
     if (!ethereumAddresses.trim()) {

@@ -1,70 +1,41 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { 
-  getAtom, 
-  getTriple, 
+import {
+  createAtomFromString,
+  createAtomFromEthereumAccount,
+  createAtomFromThing,
   pinThing,
+  uploadJsonToPinata,
   batchCreateAtomsFromEthereumAccounts,
-  batchCreateAtomsFromIpfsUris,
   batchCreateAtomsFromSmartContracts,
   batchCreateAtomsFromThings,
+  batchCreateAtomsFromIpfsUris,
   batchCreateTripleStatements,
-  createAtomFromEthereumAccount,
-  createAtomFromIpfsUpload,
-  createAtomFromIpfsUri,
-  createAtomFromString,
-  createAtomFromThing,
-  uploadJsonToPinata
+  getAtom,
+  getTriple,
+  getEthMultiVaultAddressFromChainId,
+  getAtomCreationFees,
+  getTripleCreationFees,
+  getPinataApiToken
 } from '@0xintuition/sdk'
 
 export function useIntuition() {
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const initializeIntuition = async () => {
-      try {
-        // The Intuition SDK exports individual functions, no initialization needed
-        setIsInitialized(true)
-        setError(null)
-      } catch (err) {
-        console.error('Failed to initialize Intuition SDK:', err)
-        setError('Failed to initialize Intuition SDK')
-      }
-    }
-
-    initializeIntuition()
-  }, [])
-
   return {
-    intuition: {
-      atoms: {
-        get: getAtom,
-        create: {
-          fromEthereumAccount: createAtomFromEthereumAccount,
-          fromIpfsUpload: createAtomFromIpfsUpload,
-          fromIpfsUri: createAtomFromIpfsUri,
-          fromString: createAtomFromString,
-          fromThing: createAtomFromThing,
-          batchFromEthereumAccounts: batchCreateAtomsFromEthereumAccounts,
-          batchFromIpfsUris: batchCreateAtomsFromIpfsUris,
-          batchFromSmartContracts: batchCreateAtomsFromSmartContracts,
-          batchFromThings: batchCreateAtomsFromThings,
-        }
-      },
-      triples: {
-        get: getTriple,
-        create: {
-          batch: batchCreateTripleStatements
-        }
-      },
-      pinata: {
-        uploadJson: uploadJsonToPinata
-      },
-      pinThing
-    },
-    isInitialized,
-    error
+    createAtomFromString,
+    createAtomFromEthereumAccount,
+    createAtomFromThing,
+    pinThing,
+    uploadJsonToPinata,
+    batchCreateAtomsFromEthereumAccounts,
+    batchCreateAtomsFromSmartContracts,
+    batchCreateAtomsFromThings,
+    batchCreateAtomsFromIpfsUris,
+    batchCreateTripleStatements,
+    getAtom,
+    getTriple,
+    getEthMultiVaultAddressFromChainId,
+    getAtomCreationFees,
+    getTripleCreationFees,
+    getPinataApiToken
   }
 } 

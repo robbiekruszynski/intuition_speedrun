@@ -1,27 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi'
 import { useIntuition } from '@/hooks/use-intuition'
-import { useAccount, useChainId } from 'wagmi'
-import { 
-  createAtomFromString, 
-  createAtomFromIpfsUri, 
-  createAtomFromIpfsUpload,
-  createAtomFromThing,
-  createAtomFromEthereumAccount,
-  pinThing,
-  uploadJsonToPinata,
-  getAtom,
-  getEthMultiVaultAddressFromChainId
-} from '@0xintuition/sdk'
-import { 
-  getIntuitionConfig, 
-  isSupportedNetwork, 
-  PINATA_CONFIG 
-} from '@/lib/intuition-config'
-import { usePublicClient, useWalletClient } from 'wagmi'
+import { SUPPORTED_NETWORKS } from '@/lib/intuition-config'
+import { searchAtomWithNetwork, getNetworkSearchMessage, isTestnetNetwork } from '@/lib/graphql-config'
+import { getEthMultiVaultAddressFromChainId } from '@0xintuition/sdk'
 
-export function AtomTab() {
+export default function AtomTab() {
   const [searchQuery, setSearchQuery] = useState('')
   const [createName, setCreateName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
@@ -34,12 +20,29 @@ export function AtomTab() {
   const [error, setError] = useState<string | null>(null)
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
   const [activeAtomTab, setActiveAtomTab] = useState<'create' | 'advanced'>('create')
-
-  const { intuition } = useIntuition()
+  
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
+  
+  const {
+    createAtomFromString,
+    createAtomFromEthereumAccount,
+    createAtomFromThing,
+    pinThing,
+    uploadJsonToPinata,
+    getAtom,
+    getEthMultiVaultAddressFromChainId
+  } = useIntuition()
+
+  const getIntuitionConfig = (chainId: number) => {
+    return SUPPORTED_NETWORKS.find(network => network.chainId === chainId)
+  }
+
+  const isSupportedNetwork = (chainId: number) => {
+    return SUPPORTED_NETWORKS.some(network => network.chainId === chainId)
+  }
 
   const getAtomTypeDisplay = (type: any) => {
     if (!type) return 'Unknown'
@@ -76,7 +79,7 @@ export function AtomTab() {
         setTimeout(() => reject(new Error('Search timeout - request took too long')), 30000)
       )
       
-      const searchPromise = getAtom(searchQuery)
+      const searchPromise = searchAtomWithNetwork(searchQuery, chainId, getAtom)
       const atom = await Promise.race([searchPromise, timeoutPromise])
       
       if (atom) {
@@ -147,12 +150,21 @@ export function AtomTab() {
           blockNumber: (atom as any).block_number,
           atomContent: atomContent,
           hasImage: atomContent.hasImage,
-          imageUrl: atomContent.imageUrl
+          imageUrl: atomContent.imageUrl,
+          // Add network context information
+          networkContext: (atom as any)._networkContext
         }
         
         setResults([transformedAtom])
       } else {
-        setError(`Atom ${searchQuery} not found. Note: You can only search for atoms on mainnet networks.`)
+        const networkConfig = getIntuitionConfig(chainId)
+        const isTestnet = isTestnetNetwork(chainId)
+        
+        if (isTestnet) {
+          setError(`Atom ${searchQuery} not found. ${getNetworkSearchMessage(chainId, 'atom')}`)
+        } else {
+          setError(`Atom ${searchQuery} not found.`)
+        }
         setResults([])
       }
     } catch (err) {
@@ -168,10 +180,10 @@ export function AtomTab() {
       }
       
       const networkConfig = getIntuitionConfig(chainId)
-      const isTestnet = networkConfig?.testnet || false
+      const isTestnet = isTestnetNetwork(chainId)
       
       if (isTestnet) {
-        errorMessage += `\n\nNote: You're on ${networkConfig?.name}. Testnet searches can be slower and less reliable than mainnet.`
+        errorMessage += `\n\n${getNetworkSearchMessage(chainId, 'atom')}`
       }
       
       setError(errorMessage)
@@ -418,7 +430,12 @@ export function AtomTab() {
     setError(null)
     
     try {
-      const atom = await getAtom(vaultLookupId)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Vault lookup timeout - request took too long')), 30000)
+      )
+      
+      const searchPromise = searchAtomWithNetwork(vaultLookupId, chainId, getAtom)
+      const atom = await Promise.race([searchPromise, timeoutPromise])
       
       if (atom) {
         const cleanAtomData = (data: any) => {
@@ -444,42 +461,79 @@ export function AtomTab() {
           return 'Content Available'
         }
 
+        const parseAtomContent = (data: any) => {
+          if (!data) return { content: 'No content available', type: 'empty' }
+          
+          if (typeof data === 'string') {
+            if (data.startsWith('Qm') && data.length > 40) {
+              return { content: data, type: 'ipfs-hash' }
+            }
+            if (data.startsWith('{') || data.startsWith('[')) {
+              try {
+                const parsed = JSON.parse(data)
+                return { 
+                  content: parsed, 
+                  type: 'json',
+                  name: parsed.name,
+                  description: parsed.description,
+                  createdAt: parsed.createdAt,
+                  hasImage: parsed.hasImage,
+                  imageUrl: parsed.imageUrl
+                }
+              } catch {
+                return { content: data, type: 'text' }
+              }
+            }
+            return { content: data, type: 'text' }
+          }
+          
+          return { content: data, type: 'object' }
+        }
+
+        const atomContent = parseAtomContent((atom as any).data || (atom as any).label)
+
         const transformedAtom = {
-          name: cleanAtomData(atom.label) || cleanAtomData(atom.data) || 'Unnamed Atom',
-          description: cleanAtomData(atom.data) || cleanAtomData(atom.label) || 'No description available',
-          id: atom.term_id?.toString() || vaultLookupId,
+          name: atomContent.name || cleanAtomData((atom as any).label) || cleanAtomData((atom as any).data) || 'Unnamed Atom',
+          description: atomContent.description || cleanAtomData((atom as any).data) || cleanAtomData((atom as any).label) || 'No description available',
+          id: (atom as any).term_id?.toString() || vaultLookupId,
           vaultId: vaultLookupId,
-          creator: atom.creator?.label || 'Unknown',
-          createdAt: atom.created_at,
-          type: getAtomTypeDisplay(atom.type),
-          emoji: atom.emoji,
-          image: atom.image,
-          transactionHash: atom.transaction_hash,
-          blockNumber: atom.block_number,
-          vaultInfo: atom.term?.vaults ? {
-            positionCount: atom.term.vaults[0]?.position_count || 0,
-            totalShares: atom.term.vaults[0]?.total_shares || 0,
-            currentSharePrice: atom.term.vaults[0]?.current_share_price || 0,
-            positionsCount: atom.term.vaults[0]?.positions_aggregate?.aggregate?.count || 0,
-            vaultAddress: atom.term.vaults[0]?.address || '',
-            vaultId: atom.term.vaults[0]?.id || '',
-            totalValue: atom.term.vaults[0]?.total_value || 0,
-            shareSupply: atom.term.vaults[0]?.share_supply || 0,
-            marketCap: atom.term.vaults[0]?.market_cap || 0,
-            lastUpdated: atom.term.vaults[0]?.last_updated || '',
-            positions: atom.term.vaults[0]?.positions || [],
-            tradingVolume: atom.term.vaults[0]?.trading_volume || 0,
-            priceHistory: atom.term.vaults[0]?.price_history || []
-          } : null
+          creator: (atom as any).creator?.label || 'Unknown',
+          createdAt: (atom as any).created_at,
+          type: getAtomTypeDisplay((atom as any).type),
+          emoji: (atom as any).emoji,
+          image: (atom as any).image,
+          transactionHash: (atom as any).transaction_hash,
+          blockNumber: (atom as any).block_number,
+          atomContent: atomContent,
+          hasImage: atomContent.hasImage,
+          imageUrl: atomContent.imageUrl,
+          // Add network context information
+          networkContext: (atom as any)._networkContext
         }
         
         setResults([transformedAtom])
       } else {
-        setError(`Vault ${vaultLookupId} not found. Note: Vaults are created automatically when atoms or triples are created.`)
+        const networkConfig = getIntuitionConfig(chainId)
+        const isTestnet = isTestnetNetwork(chainId)
+        
+        if (isTestnet) {
+          setError(`Vault ${vaultLookupId} not found. ${getNetworkSearchMessage(chainId, 'vault')}`)
+        } else {
+          setError(`Vault ${vaultLookupId} not found.`)
+        }
         setResults([])
       }
     } catch (err) {
-      setError(`Failed to lookup vault: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const networkConfig = getIntuitionConfig(chainId)
+      const isTestnet = isTestnetNetwork(chainId)
+      
+      let errorMessage = `Failed to lookup vault: ${err instanceof Error ? err.message : 'Unknown error'}`
+      
+      if (isTestnet) {
+        errorMessage += `\n\n${getNetworkSearchMessage(chainId, 'vault')}`
+      }
+      
+      setError(errorMessage)
       setResults([])
     } finally {
       setIsLoading(false)
@@ -629,7 +683,8 @@ export function AtomTab() {
       <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Atoms</h2>
         <p className="text-gray-600 dark:text-gray-400">
-          Create and search for atoms - the fundamental units of knowledge in the Intuition ecosystem.
+          Create and search for atoms - the fundamental units of knowledge in the Intuition ecosystem. 
+          For bulk atom creation, see the <span className="text-purple-600 dark:text-purple-400 font-medium">Batch Operations</span> tab.
         </p>
                 {!isConnected ? (
           <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
@@ -659,16 +714,27 @@ export function AtomTab() {
           </div>
         )}
       </div>
-
+      
       {/* Search Atoms Section - Moved to Top */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search Atoms</h3>
+        
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">!</span>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">Search Limitation</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                You can only search for atoms and triples on mainnet networks. 
+              </p>
+            </div>
+          </div>
+        </div>
+        
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          <span>
-            Search for atoms by their ID. 
-          <br />
-            <span className="text-blue-600 dark:text-blue-400 font-medium">Note: You can only search for atoms and triples on mainnet networks.</span>
-          </span>
+          Search for atoms by their ID.
         </p>
         
         <div className="flex gap-4">
@@ -717,8 +783,8 @@ export function AtomTab() {
                             result.type === 'Contract Atom' ? 'bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300' :
                             'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
                           }`}>
-                            {result.type}
-                          </span>
+                          {result.type}
+                        </span>
                         )}
                       </div>
                       {result.description && (
@@ -792,7 +858,7 @@ export function AtomTab() {
                         {result.atomContent?.type === 'json' && result.atomContent.content?.type && (
                           <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Content Type</span>
-                            <span className="text-gray-900 dark:text-gray-100 font-medium">{result.atomContent.content.type}</span>
+                            <span className="text-gray-900 dark:text-gray-100">{result.atomContent.content.type}</span>
                           </div>
                         )}
                         {result.atomContent?.type === 'json' && result.atomContent.content?.createdAt && (
@@ -926,7 +992,7 @@ export function AtomTab() {
       {/* Atom Creation Tabs */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <div className="flex space-x-1 mb-6">
-          <button
+              <button
             onClick={() => setActiveAtomTab('create')}
             className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
               activeAtomTab === 'create'
@@ -935,7 +1001,7 @@ export function AtomTab() {
             }`}
           >
             Create New Atom
-          </button>
+              </button>
           <button
             onClick={() => setActiveAtomTab('advanced')}
             className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
@@ -957,68 +1023,68 @@ export function AtomTab() {
                 Create atoms with different content types. The SDK automatically handles the appropriate creation method based on your input.
               </p>
 
-              <div className="space-y-4">
-                <div>
+          <div className="space-y-4">
+            <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter atom name..."
-                    value={createName}
-                    onChange={(e) => setCreateName(e.target.value)}
+                Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter atom name..."
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white bg-white dark:bg-gray-700"
-                  />
-                </div>
+              />
+            </div>
 
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    placeholder="Enter atom description..."
-                    value={createDescription}
-                    onChange={(e) => setCreateDescription(e.target.value)}
-                    rows={3}
+                Description
+              </label>
+              <textarea
+                placeholder="Enter atom description..."
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+                rows={3}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white bg-white dark:bg-gray-700"
-                  />
-                </div>
+              />
+            </div>
 
                 {/* IPFS Content Section */}
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     IPFS Content (Optional)
-                  </label>
+              </label>
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                     <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
                       Add IPFS content to your atom. You can provide an existing IPFS URI or JSON content to upload.
                     </p>
-                    <textarea
+              <textarea
                       placeholder="Enter IPFS URI (ipfs://...) or JSON content to upload to IPFS..."
                       value={ipfsContent}
                       onChange={(e) => setIpfsContent(e.target.value)}
-                      rows={3}
+                rows={3}
                       className="w-full px-3 py-2 border border-blue-200 dark:border-blue-700 rounded text-sm text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-700"
-                    />
+              />
                     <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
                       IPFS content can include images, documents, or complex JSON structures
                     </p>
-                  </div>
+            </div>
                 </div>
 
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Image (Optional)
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                Image (Optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white bg-white dark:bg-gray-700"
-                  />
-                </div>
+              />
+            </div>
 
-                <button
+            <button
                   onClick={() => {
                     if (imageFile) {
                       handleCreateRichAtom()
@@ -1033,12 +1099,12 @@ export function AtomTab() {
                       handleCreate()
                     }
                   }}
-                  disabled={isLoading || !createName.trim() || !createDescription.trim()}
+              disabled={isLoading || !createName.trim() || !createDescription.trim()}
                   className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
+            >
                   {isLoading ? 'Creating...' : 'Create Atom'}
-                </button>
-              </div>
+            </button>
+          </div>
 
               {/* Creation Type Indicator */}
               <div className="mt-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -1059,8 +1125,8 @@ export function AtomTab() {
                   {ipfsContent.trim() && imageFile && (
                     <p><strong>Rich Content:</strong> Name, description, IPFS content, and image</p>
                   )}
-                </div>
-              </div>
+            </div>
+            </div>
             </div>
           </div>
         )}
@@ -1080,18 +1146,18 @@ export function AtomTab() {
                   <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">Create from Ethereum Account</h4>
                   <div className="text-xs text-blue-600 dark:text-blue-400 mb-3">
                     SDK: <code>createAtomFromEthereumAccount</code> - Creates an atom representing an Ethereum account.
-                  </div>
-                  
+      </div>
+
                   <div className="space-y-3 flex-1">
-                    <input
-                      type="text"
+          <input
+            type="text"
                       placeholder="Enter Ethereum address (e.g., 0x123...)"
                       className="w-full px-3 py-2 border border-blue-200 dark:border-blue-600 rounded text-sm text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-700"
                       onChange={(e) => setCreateName(e.target.value)}
                     />
                   </div>
                   
-                  <button
+          <button
                     onClick={async () => {
                       if (!createName.trim()) {
                         setError('Please enter an Ethereum address')
@@ -1169,15 +1235,15 @@ export function AtomTab() {
                     className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm mt-auto"
                   >
                     {isLoading ? 'Creating...' : 'Create from ETH Account'}
-                  </button>
-                </div>
-
+          </button>
+        </div>
+        
                 {/* Create from Thing */}
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 flex flex-col h-full">
                   <h4 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-3">Create from Thing</h4>
                   <div className="text-xs text-green-600 dark:text-green-400 mb-3">
                     SDK: <code>createAtomFromThing</code> - Creates an atom from a "thing" entity.
-                  </div>
+          </div>
                   
                   <div className="mb-3 p-3 bg-green-100 dark:bg-green-800 rounded border border-green-200 dark:border-green-600">
                     <div className="text-xs font-semibold text-green-800 dark:text-green-200 mb-2">JSON Format Example:</div>
@@ -1192,7 +1258,7 @@ export function AtomTab() {
   }
 }`}
                     </pre>
-                  </div>
+                          </div>
                   
                   <div className="space-y-3 flex-1">
                     <textarea
@@ -1201,7 +1267,7 @@ export function AtomTab() {
                       rows={4}
                       onChange={(e) => setCreateDescription(e.target.value)}
                     />
-                  </div>
+                          </div>
                   
                   <button
                     onClick={async () => {
@@ -1243,6 +1309,40 @@ export function AtomTab() {
                           return
                         }
                         
+                        // Check Pinata token before attempting to create atom
+                        if (!PINATA_CONFIG.apiToken) {
+                          setError('Pinata API token not configured. Please add NEXT_PUBLIC_PINATA_API_TOKEN to your .env file.')
+                          setIsLoading(false)
+                          return
+                        }
+                        
+                        if (PINATA_CONFIG.apiToken.length < 100) {
+                          setError(`Pinata token appears too short (${PINATA_CONFIG.apiToken.length} characters). JWT tokens should be much longer. Please check your .env file.`)
+                          setIsLoading(false)
+                          return
+                        }
+                        
+                        // Test Pinata authentication first
+                        try {
+                          const testResponse = await fetch('https://api.pinata.cloud/data/testAuthentication', {
+                            method: 'GET',
+                            headers: {
+                              'Authorization': `Bearer ${PINATA_CONFIG.apiToken}`
+                            }
+                          })
+                          
+                          if (!testResponse.ok) {
+                            const errorText = await testResponse.text()
+                            console.error('Pinata test failed:', errorText)
+                            throw new Error(`Pinata authentication failed: ${testResponse.status} - ${errorText}`)
+                          }
+                        } catch (testErr) {
+                          console.error('Pinata test error:', testErr)
+                          setError(`Pinata authentication failed: ${testErr instanceof Error ? testErr.message : 'Unknown error'}. Please check your API token.`)
+                          setIsLoading(false)
+                          return
+                        }
+                        
                         const ethMultiVaultAddress = getEthMultiVaultAddressFromChainId(chainId)
                         
                         // SDK: Create atom from thing
@@ -1270,7 +1370,21 @@ export function AtomTab() {
                         setTransactionHash(result.transactionHash)
                         setCreateDescription('')
                       } catch (err) {
-                        setError(`Failed to create atom from thing: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                        console.error('Error creating atom from thing:', err)
+                        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+                        
+                        if (errorMessage.includes('Failed to pin thing on IPFS')) {
+                          setError(`IPFS pinning failed. This could be due to:
+1. Invalid Pinata API token
+2. Network connectivity issues
+3. Pinata service issues
+
+Error details: ${errorMessage}
+
+Please check your Pinata configuration and try again.`)
+                        } else {
+                          setError(`Failed to create atom from thing: ${errorMessage}`)
+                        }
                       } finally {
                         setIsLoading(false)
                       }
@@ -1280,14 +1394,14 @@ export function AtomTab() {
                   >
                     {isLoading ? 'Creating...' : 'Create from Thing'}
                   </button>
-                </div>
+                          </div>
 
                 {/* Pin Thing to IPFS */}
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 flex flex-col h-full">
                   <h4 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-3">Pin Thing to IPFS</h4>
                   <div className="text-xs text-purple-600 dark:text-purple-400 mb-3">
                     SDK: <code>pinThing</code> - Pins a thing to IPFS using Pinata.
-                  </div>
+                          </div>
                   
                   <div className="mb-3 p-3 bg-purple-100 dark:bg-purple-800 rounded border border-purple-200 dark:border-purple-600">
                     <div className="text-xs font-semibold text-purple-800 dark:text-purple-200 mb-2">JSON Format Example:</div>
@@ -1301,7 +1415,7 @@ export function AtomTab() {
   }
 }`}
                     </pre>
-                  </div>
+                            </div>
                   
                   <div className="space-y-3 flex-1">
                     <textarea
@@ -1310,7 +1424,7 @@ export function AtomTab() {
                       rows={4}
                       onChange={(e) => setCreateDescription(e.target.value)}
                     />
-                  </div>
+                            </div>
                   
                   <button
                     onClick={async () => {
@@ -1380,7 +1494,7 @@ export function AtomTab() {
                   <div className="mb-3 p-3 bg-orange-100 dark:bg-orange-800 rounded border border-orange-200 dark:border-orange-600">
                     <div className="text-xs font-semibold text-orange-800 dark:text-orange-200 mb-2">JSON Format Examples:</div>
                     <div className="space-y-2">
-                      <div>
+                            <div>
                         <div className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-1">Simple Object:</div>
                         <pre className="text-xs text-orange-700 dark:text-orange-300 bg-white dark:bg-gray-700 p-2 rounded overflow-x-auto">
 {`{
@@ -1389,8 +1503,8 @@ export function AtomTab() {
   "active": true
 }`}
                         </pre>
-                      </div>
-                      <div>
+                            </div>
+                            <div>
                         <div className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-1">Complex Object:</div>
                         <pre className="text-xs text-orange-700 dark:text-orange-300 bg-white dark:bg-gray-700 p-2 rounded overflow-x-auto">
 {`{
@@ -1403,9 +1517,9 @@ export function AtomTab() {
   }
 }`}
                         </pre>
+                            </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
                   
                   <div className="space-y-3 flex-1">
                     <textarea
@@ -1414,7 +1528,7 @@ export function AtomTab() {
                       rows={4}
                       onChange={(e) => setCreateDescription(e.target.value)}
                     />
-                  </div>
+                          </div>
                   
                   <button
                     onClick={async () => {
@@ -1472,8 +1586,8 @@ export function AtomTab() {
                   >
                     {isLoading ? 'Uploading...' : 'Upload JSON to Pinata'}
                   </button>
-                </div>
-              </div>
+                          </div>
+                          </div>
             </div>
           </div>
         )}

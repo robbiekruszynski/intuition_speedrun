@@ -15,6 +15,11 @@ import {
   getIntuitionConfig, 
   isSupportedNetwork
 } from '@/lib/intuition-config'
+import { 
+  searchTripleWithNetwork,
+  isTestnetNetwork,
+  getNetworkSearchMessage
+} from '@/lib/graphql-config'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 export function TripleTab() {
@@ -131,65 +136,90 @@ export function TripleTab() {
     setError(null)
     
     try {
-      const triple = await getTriple(searchQuery)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout - request took too long')), 30000)
+      )
       
-      if (triple) {
+      const searchPromise = searchTripleWithNetwork(searchQuery, chainId, getTriple)
+      
+      const result = await Promise.race([searchPromise, timeoutPromise])
+      
+      if (result) {
         let subjectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
         let predicateAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
         let objectAtomInfo = { name: 'Unknown', description: '', type: 'Unknown' }
         
         try {
-          if (triple.subject_id) {
-            const subjectAtom = await getAtom(triple.subject_id.toString())
+          if (result.subject_id) {
+            const subjectAtom = await getAtom(result.subject_id.toString())
             subjectAtomInfo = parseAtomData(subjectAtom?.data || subjectAtom)
           }
         } catch (err) {
-          subjectAtomInfo = { name: `Atom ${triple.subject_id}`, description: '', type: 'Unknown' }
+          subjectAtomInfo = { name: `Atom ${result.subject_id}`, description: '', type: 'Unknown' }
         }
         
         try {
-          if (triple.predicate_id) {
-            const predicateAtom = await getAtom(triple.predicate_id.toString())
+          if (result.predicate_id) {
+            const predicateAtom = await getAtom(result.predicate_id.toString())
             predicateAtomInfo = parseAtomData(predicateAtom?.data || predicateAtom)
           }
         } catch (err) {
-          predicateAtomInfo = { name: `Atom ${triple.predicate_id}`, description: '', type: 'Unknown' }
+          predicateAtomInfo = { name: `Atom ${result.predicate_id}`, description: '', type: 'Unknown' }
         }
         
         try {
-          if (triple.object_id) {
-            const objectAtom = await getAtom(triple.object_id.toString())
+          if (result.object_id) {
+            const objectAtom = await getAtom(result.object_id.toString())
             objectAtomInfo = parseAtomData(objectAtom?.data || objectAtom)
           }
         } catch (err) {
-          objectAtomInfo = { name: `Atom ${triple.object_id}`, description: '', type: 'Unknown' }
+          objectAtomInfo = { name: `Atom ${result.object_id}`, description: '', type: 'Unknown' }
         }
         
         const transformedTriple = {
           subject: subjectAtomInfo.name,
           predicate: predicateAtomInfo.name,
           object: objectAtomInfo.name,
-          id: triple.term_id?.toString() || searchQuery,
-          transactionHash: triple.transaction_hash,
-          blockNumber: triple.block_number,
-          creator: triple.creator?.label || 'Unknown',
-          createdAt: triple.created_at,
-          type: getTripleTypeDisplay(triple.type),
-          subjectId: triple.subject_id?.toString(),
-          predicateId: triple.predicate_id?.toString(),
-          objectId: triple.object_id?.toString(),
+          id: result.term_id?.toString() || searchQuery,
+          vaultId: result.term_id?.toString() || searchQuery,
+          createdAt: result.created_at,
+          transactionHash: result.transaction_hash,
+          blockNumber: result.block_number,
+          creator: result.creator?.label || 'Unknown',
+          type: getTripleTypeDisplay(result.type),
+          subjectId: result.subject_id?.toString(),
+          predicateId: result.predicate_id?.toString(),
+          objectId: result.object_id?.toString(),
           subjectAtomInfo,
           predicateAtomInfo,
-          objectAtomInfo
+          objectAtomInfo,
+          // Add network context information
+          networkContext: result._networkContext
         }
         
         setResults([transformedTriple])
       } else {
-        setError('Triple not found. Try a different triple ID.')
+        const networkConfig = getIntuitionConfig(chainId)
+        const isTestnet = isTestnetNetwork(chainId)
+        
+        if (isTestnet) {
+          setError(`Triple ${searchQuery} not found. ${getNetworkSearchMessage(chainId, 'triple')}`)
+        } else {
+          setError('Triple not found. Try a different triple ID.')
+        }
         setResults([])
       }
     } catch (err) {
-      setError(`Failed to search triples: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const networkConfig = getIntuitionConfig(chainId)
+      const isTestnet = isTestnetNetwork(chainId)
+      
+      let errorMessage = `Failed to search triples: ${err instanceof Error ? err.message : 'Unknown error'}`
+      
+      if (isTestnet) {
+        errorMessage += `\n\n${getNetworkSearchMessage(chainId, 'triple')}`
+      }
+      
+      setError(errorMessage)
       setResults([])
     } finally {
       setIsLoading(false)
@@ -776,8 +806,28 @@ Try searching again in a few minutes, or check the transaction hash to confirm t
         )}
       </div>
 
+      {/* Search Triples Section */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search Triples</h3>
+        
+        {/* Prominent Mainnet Search Notice */}
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">!</span>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">Search Limitation</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                You can only search for atoms and triples on mainnet networks. 
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Search for triples by their ID.
+        </p>
         <div className="flex gap-4">
           <input
             type="text"
@@ -795,13 +845,6 @@ Try searching again in a few minutes, or check the transaction hash to confirm t
             {isLoading ? 'Searching...' : 'Search'}
           </button>
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          <span>
-            Search for triples by their ID. 
-            <br />
-            <span className="text-blue-600 dark:text-blue-400 font-medium">Note: You can only search for atoms and triples on mainnet networks.</span>
-          </span>
-        </p>
       </div>
 
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">

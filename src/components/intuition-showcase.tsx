@@ -12,8 +12,8 @@ type TabType = 'atoms' | 'triples' | 'use-cases' | 'batch-operations'
 
 const tabs = [
   { id: 'atoms', name: 'Atoms', icon: '' },
-  { id: 'triples', name: 'Triples', icon: '' },
   { id: 'batch-operations', name: 'Batch Operations', icon: '' },
+  { id: 'triples', name: 'Triples', icon: '' },
   { id: 'use-cases', name: 'Use Cases', icon: '' }
 ]
 

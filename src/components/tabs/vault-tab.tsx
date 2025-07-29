@@ -27,13 +27,11 @@ export function AdvancedTab() {
   const [results, setResults] = useState<any[]>([])
   const [transactionHash, setTransactionHash] = useState<string | null>(null)
 
-  // Batch inputs
   const [ethereumAddresses, setEthereumAddresses] = useState('')
   const [smartContractAddresses, setSmartContractAddresses] = useState('')
   const [thingsData, setThingsData] = useState('')
   const [ipfsUris, setIpfsUris] = useState('')
   
-  // Single inputs
   const [singleEthereumAddress, setSingleEthereumAddress] = useState('')
   const [thingData, setThingData] = useState('')
   const [jsonData, setJsonData] = useState('')
@@ -609,16 +607,16 @@ export function AdvancedTab() {
                 rows={3}
                 className="w-full px-3 py-2 border border-purple-200 dark:border-purple-600 rounded text-sm text-purple-900 dark:text-purple-100 bg-white dark:bg-gray-700"
               />
-              <button
+            <button
                 onClick={handleBatchCreateFromIpfsUris}
                 disabled={isLoading || !ipfsUris.trim()}
                 className="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {isLoading ? 'Creating...' : 'Batch Create from IPFS URIs'}
-              </button>
+            </button>
             </div>
           </div>
-        </div>
+      </div>
 
         {/* Advanced Atom Creation */}
         <div className="space-y-6">
@@ -686,7 +684,7 @@ export function AdvancedTab() {
               >
                 {isLoading ? 'Pinning...' : 'Pin Thing to IPFS'}
               </button>
-            </div>
+              </div>
 
             {/* Upload JSON to Pinata */}
             <div className="space-y-3 mb-4">
@@ -709,7 +707,7 @@ export function AdvancedTab() {
               </button>
             </div>
           </div>
-        </div>
+              </div>
 
         {/* Results */}
         {results.length > 0 && (
@@ -719,7 +717,7 @@ export function AdvancedTab() {
               {results.map((result, index) => (
                 <div key={index} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <div className="flex justify-between items-start">
-                    <div>
+              <div>
                       <h4 className="font-medium text-gray-900 dark:text-white">{result.name}</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-400">{result.description}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">

@@ -9,7 +9,6 @@ import { RainbowKitProvider, getDefaultConfig } from '@rainbow-me/rainbowkit'
 
 const queryClient = new QueryClient()
 
-// WalletConnect setup for Intuition SDK - supports mainnet and testnet networks
 function getConfig() {
   return getDefaultConfig({
     appName: 'Intuition SDK Showcase',
